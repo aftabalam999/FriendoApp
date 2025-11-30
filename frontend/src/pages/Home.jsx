@@ -10,7 +10,7 @@ import GroupMembersModal from '../components/GroupMembersModal';
 
 export default function Home() {
     const { user, logout } = useAuth();
-    const { callUser } = useSocket();
+    const { callUser, socket } = useSocket();
     const [activeTab, setActiveTab] = useState('messages'); // messages, requests, friends, search
     const [chats, setChats] = useState([]);
     const [friends, setFriends] = useState([]);
@@ -42,14 +42,12 @@ export default function Home() {
         fetchAllUsers();
     }, []);
 
-    // Poll for messages and typing status
+    // Poll for messages and typing status - REMOVED for performance
+    // Relying on socket events for real-time updates
     useEffect(() => {
-        let interval;
         if (activeChat) {
             fetchChatData(activeChat.id);
-            interval = setInterval(() => fetchChatData(activeChat.id), 3000);
         }
-        return () => clearInterval(interval);
     }, [activeChat]);
 
     useEffect(() => {
@@ -208,6 +206,107 @@ export default function Home() {
         } catch (error) { console.error(error); }
     };
 
+    const markMessagesAsSeen = async () => {
+        if (!activeChat) return;
+        try {
+            await api.post(`/chats/${activeChat.id}/messages/seen`);
+        } catch (error) { console.error(error); }
+    };
+
+    useEffect(() => {
+        if (activeChat && messages.length > 0) {
+            const lastMsg = messages[messages.length - 1];
+            if (lastMsg.senderId !== user.uid) {
+                const seenBy = lastMsg.seenBy || [];
+                if (!seenBy.includes(user.uid)) {
+                    markMessagesAsSeen();
+                }
+            }
+        }
+    }, [activeChat, messages]);
+
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleMessagesSeen = ({ chatId, messageIds, seenBy }) => {
+            // Update active chat messages
+            if (activeChat?.id === chatId) {
+                setMessages(prev => prev.map(msg => {
+                    if (messageIds.includes(msg.id)) {
+                        const existingSeenBy = msg.seenBy || [];
+                        if (!existingSeenBy.includes(seenBy)) {
+                            return { ...msg, seenBy: [...existingSeenBy, seenBy] };
+                        }
+                    }
+                    return msg;
+                }));
+            }
+
+            // Update chat list lastMessage status
+            setChats(prev => prev.map(chat => {
+                if (chat.id === chatId && chat.lastMessage && messageIds.includes(chat.lastMessage.id)) {
+                    const existingSeenBy = chat.lastMessage.seenBy || [];
+                    if (!existingSeenBy.includes(seenBy)) {
+                        return {
+                            ...chat,
+                            lastMessage: {
+                                ...chat.lastMessage,
+                                seenBy: [...existingSeenBy, seenBy]
+                            }
+                        };
+                    }
+                }
+                return chat;
+            }));
+        };
+
+        const handleNewMessage = ({ chatId, message, lastMessage }) => {
+            // Update active chat messages
+            if (activeChat?.id === chatId) {
+                setMessages(prev => {
+                    // Avoid duplicates
+                    if (prev.some(m => m.id === message.id)) return prev;
+                    return [...prev, message];
+                });
+            }
+
+            // Update chat list
+            setChats(prev => {
+                const otherChats = prev.filter(c => c.id !== chatId);
+                const chatToUpdate = prev.find(c => c.id === chatId);
+
+                if (chatToUpdate) {
+                    // Optimistically mark as seen if we are in this chat
+                    let updatedLastMessage = lastMessage;
+                    if (activeChat?.id === chatId) {
+                        const seenBy = lastMessage.seenBy || [];
+                        if (!seenBy.includes(user.uid)) {
+                            updatedLastMessage = { ...lastMessage, seenBy: [...seenBy, user.uid] };
+                        }
+                    }
+
+                    return [{
+                        ...chatToUpdate,
+                        lastMessageAt: message.createdAt,
+                        lastMessage: updatedLastMessage
+                    }, ...otherChats];
+                } else {
+                    // New chat (might need to fetch details, but for now just ignore or fetchChats)
+                    fetchChats();
+                    return prev;
+                }
+            });
+        };
+
+        socket.on('messagesSeen', handleMessagesSeen);
+        socket.on('newMessage', handleNewMessage);
+
+        return () => {
+            socket.off('messagesSeen', handleMessagesSeen);
+            socket.off('newMessage', handleNewMessage);
+        };
+    }, [socket, activeChat]);
+
     const handleFileUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -219,7 +318,7 @@ export default function Home() {
                 text: '',
                 media: { url, name, type }
             });
-            fetchChatData(activeChat.id);
+            // fetchChatData(activeChat.id); // Handled by socket now
         } catch (error) { showToast('Upload failed', 'error'); }
         setIsUploading(false);
     };
@@ -262,7 +361,34 @@ export default function Home() {
     };
 
     const activePartner = activeChat ? getChatPartner(activeChat) : null;
-    const hasUnreadMessages = false; // Placeholder logic
+
+    const isUnread = (chat) => {
+        return chat.lastMessage?.senderId !== user.uid &&
+            chat.lastMessage?.seenBy &&
+            !chat.lastMessage.seenBy.includes(user.uid);
+    };
+
+    const hasUnreadMessages = chats.some(isUnread);
+
+    const handleChatClick = (chat) => {
+        setActiveChat(chat);
+        // Optimistically mark as seen
+        setChats(prev => prev.map(c => {
+            if (c.id === chat.id && c.lastMessage) {
+                const seenBy = c.lastMessage.seenBy || [];
+                if (!seenBy.includes(user.uid)) {
+                    return {
+                        ...c,
+                        lastMessage: {
+                            ...c.lastMessage,
+                            seenBy: [...seenBy, user.uid]
+                        }
+                    };
+                }
+            }
+            return c;
+        }));
+    };
 
     return (
         <div className="flex h-[100dvh] bg-black text-white font-sans overflow-hidden">
@@ -278,11 +404,11 @@ export default function Home() {
                 <div className="flex flex-col space-y-6 w-full items-center">
                     <div onClick={() => setActiveTab('messages')} className={`p-3 rounded-lg cursor-pointer transition-all duration-200 group relative ${activeTab === 'messages' ? 'bg-gray-900' : 'hover:bg-gray-900'}`}>
                         <MessageCircle size={24} className={`${activeTab === 'messages' ? 'text-white' : 'text-gray-500 group-hover:text-white'}`} />
-                        {hasUnreadMessages && <div className="absolute top-3 right-3 w-2 h-2 bg-red-500 rounded-full border-2 border-black"></div>}
+                        {hasUnreadMessages && <div className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-black"></div>}
                     </div>
                     <div onClick={() => setActiveTab('friends')} className={`p-3 rounded-lg cursor-pointer transition-all duration-200 group relative ${activeTab === 'friends' ? 'bg-gray-900' : 'hover:bg-gray-900'}`}>
                         <Users size={24} className={`${activeTab === 'friends' ? 'text-white' : 'text-gray-500 group-hover:text-white'}`} />
-                        {requests.length > 0 && <div className="absolute top-3 right-3 w-2 h-2 bg-red-500 rounded-full border-2 border-black"></div>}
+                        {requests.length > 0 && <div className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-black"></div>}
                     </div>
                     <div onClick={() => setActiveTab('search')} className={`p-3 rounded-lg cursor-pointer transition-all duration-200 group ${activeTab === 'search' ? 'bg-gray-900' : 'hover:bg-gray-900'}`}>
                         <Search size={24} className={`${activeTab === 'search' ? 'text-white' : 'text-gray-500 group-hover:text-white'}`} />
@@ -322,13 +448,20 @@ export default function Home() {
                                 chats.map(chat => {
                                     const partner = getChatPartner(chat);
                                     const isSelected = activeChat?.id === chat.id;
+                                    const unread = isUnread(chat);
                                     return (
-                                        <div key={chat.id} onClick={() => setActiveChat(chat)} className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer hover:bg-gray-900 ${isSelected ? 'bg-gray-900' : ''}`}>
-                                            <img src={partner.photoURL} className="w-14 h-14 rounded-full object-cover" />
+                                        <div key={chat.id} onClick={() => handleChatClick(chat)} className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer hover:bg-gray-900 ${isSelected ? 'bg-gray-900' : ''}`}>
+                                            <div className="relative">
+                                                <img src={partner.photoURL} className="w-14 h-14 rounded-full object-cover" />
+                                                {unread && <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-black"></div>}
+                                            </div>
                                             <div className="flex-1 min-w-0">
-                                                <h4 className="font-medium text-white truncate">{partner.displayName}</h4>
+                                                <div className="flex justify-between items-baseline">
+                                                    <h4 className={`font-medium truncate ${unread ? 'text-white font-bold' : 'text-gray-200'}`}>{partner.displayName}</h4>
+                                                    {unread && <div className="w-2 h-2 bg-blue-500 rounded-full ml-2"></div>}
+                                                </div>
                                                 <div className="flex items-center text-sm text-gray-500 space-x-1">
-                                                    <p className="truncate max-w-[140px]">{chat.lastMessage?.text || 'Sent an attachment'}</p>
+                                                    <p className={`truncate max-w-[140px] ${unread ? 'text-white font-semibold' : ''}`}>{chat.lastMessage?.text || 'Sent an attachment'}</p>
                                                     <span>·</span>
                                                     <span>{chat.lastMessageAt ? new Date(chat.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                                                 </div>
@@ -445,13 +578,15 @@ export default function Home() {
                                 </div>
                             </div>
                             <div className="flex items-center space-x-4 md:space-x-6 text-white flex-shrink-0">
-                                <Phone size={24} className="cursor-pointer hover:text-gray-300 md:w-[26px] md:h-[26px]" onClick={() => {
-                                    const partner = activeChat.participants.find(p => p !== user.uid);
-                                    if (partner) callUser(partner, false);
-                                }} />
+
                                 <Video size={24} className="cursor-pointer hover:text-gray-300 md:w-[26px] md:h-[26px]" onClick={() => {
-                                    const partner = activeChat.participants.find(p => p !== user.uid);
-                                    if (partner) callUser(partner);
+                                    if (activeChat.type !== 'group') {
+                                        const partner = activeChat.participants.find(p => p !== user.uid);
+                                        console.log("Video call button clicked. Partner:", partner, "Name:", activePartner?.displayName);
+                                        if (partner) callUser(partner, activePartner?.displayName, activePartner?.photoURL);
+                                    } else {
+                                        showToast('Group video calls coming soon!', 'info');
+                                    }
                                 }} />
                                 <Info size={24} className="cursor-pointer hover:text-gray-300 md:w-[26px] md:h-[26px]" />
                             </div>
@@ -463,44 +598,55 @@ export default function Home() {
                                 const showAvatar = !isMe && (index === messages.length - 1 || messages[index + 1]?.senderId === user.uid);
                                 const showName = activeChat.type === 'group' && !isMe && (index === 0 || messages[index - 1]?.senderId !== msg.senderId);
 
+                                // Check if this is the last message sent by me and if it's seen
+                                const isLastMyMessage = isMe && messages.slice(index + 1).findIndex(m => m.senderId === user.uid) === -1;
+                                const isSeen = msg.seenBy && msg.seenBy.some(uid => uid !== user.uid);
+
                                 return (
-                                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end group`}>
-                                        {!isMe && (
-                                            <div className="w-8 mr-2 flex-shrink-0">
-                                                {showAvatar && <img src={activePartner?.photoURL} className="w-7 h-7 rounded-full" />}
-                                            </div>
-                                        )}
-                                        <div className={`max-w-[60%] px-4 py-3 rounded-3xl text-[15px] leading-snug ${isMe ? 'bg-[#3797F0] text-white rounded-br-md' : 'bg-[#262626] text-white rounded-bl-md'}`}>
-                                            {showName && (
-                                                <p className="text-xs font-bold mb-1" style={{ color: getUserColor(msg.senderId) }}>
-                                                    {memberDetails[msg.senderId]?.displayName || 'Loading...'}
-                                                </p>
-                                            )}
-                                            {msg.media && (
-                                                <div className="mb-2">
-                                                    {msg.media.type.startsWith('image/') ? (
-                                                        <img
-                                                            src={msg.media.url}
-                                                            alt="attachment"
-                                                            className="rounded-lg max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                                                            onClick={() => setSelectedImage(msg.media.url)}
-                                                        />
-                                                    ) : (
-                                                        <a href={msg.media.url} target="_blank" rel="noreferrer" className="flex items-center space-x-2 text-sm underline bg-black/20 p-2 rounded">
-                                                            <Paperclip size={16} />
-                                                            <span>{msg.media.name}</span>
-                                                        </a>
-                                                    )}
+                                    <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group mb-1`}>
+                                        <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end w-full`}>
+                                            {!isMe && (
+                                                <div className="w-8 mr-2 flex-shrink-0">
+                                                    {showAvatar && <img src={activePartner?.photoURL} className="w-7 h-7 rounded-full" />}
                                                 </div>
                                             )}
-                                            <p>{msg.text}</p>
+                                            <div className={`max-w-[85%] px-4 py-3 rounded-3xl text-[15px] leading-snug ${isMe ? 'bg-[#3797F0] text-white rounded-br-md' : 'bg-[#262626] text-white rounded-bl-md'}`}>
+                                                {showName && (
+                                                    <p className="text-xs font-bold mb-1" style={{ color: getUserColor(msg.senderId) }}>
+                                                        {memberDetails[msg.senderId]?.displayName || 'Loading...'}
+                                                    </p>
+                                                )}
+                                                {msg.media && (
+                                                    <div className="mb-2">
+                                                        {msg.media.type.startsWith('image/') ? (
+                                                            <img
+                                                                src={msg.media.url}
+                                                                alt="attachment"
+                                                                className="rounded-lg max-h-60 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                                                onClick={() => setSelectedImage(msg.media.url)}
+                                                            />
+                                                        ) : (
+                                                            <a href={msg.media.url} target="_blank" rel="noreferrer" className="flex items-center space-x-2 text-sm underline bg-black/20 p-2 rounded">
+                                                                <Paperclip size={16} />
+                                                                <span>{msg.media.name}</span>
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <p>{msg.text}</p>
+                                            </div>
                                         </div>
-                                        <div className="text-[10px] text-gray-500 mt-1 mx-1">
-                                            {(() => {
-                                                if (!msg.createdAt) return '';
-                                                const date = msg.createdAt.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt);
-                                                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                            })()}
+                                        <div className={`text-[10px] text-gray-500 mt-1 mx-1 flex items-center space-x-1 ${isMe ? 'justify-end' : 'justify-start'} ${!isMe ? 'ml-12' : ''}`}>
+                                            <span>
+                                                {(() => {
+                                                    if (!msg.createdAt) return '';
+                                                    const date = msg.createdAt.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt);
+                                                    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                                })()}
+                                            </span>
+                                            {isLastMyMessage && isSeen && (
+                                                <span className="font-medium text-gray-400">Seen</span>
+                                            )}
                                         </div>
                                     </div>
                                 );

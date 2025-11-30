@@ -19,8 +19,8 @@ const initSocket = (server) => {
             socket.emit('me', socket.id);
         });
 
-        socket.on('callUser', ({ userToCall, signalData, from, name, isVideo }) => {
-            io.to(userToCall).emit('callUser', { signal: signalData, from, name, isVideo });
+        socket.on('callUser', ({ userToCall, signalData, from, name, photoURL, isVideo }) => {
+            io.to(userToCall).emit('callUser', { signal: signalData, from, name, photoURL, isVideo });
         });
 
         socket.on('answerCall', (data) => {
@@ -28,12 +28,12 @@ const initSocket = (server) => {
         });
         
         socket.on('endCall', ({ to }) => {
+            console.log(`End call requested from ${socket.id} to ${to}`);
             io.to(to).emit('callEnded');
         });
 
         socket.on('disconnect', () => {
             console.log('User disconnected:', socket.id);
-            socket.broadcast.emit("callEnded");
         });
     });
 

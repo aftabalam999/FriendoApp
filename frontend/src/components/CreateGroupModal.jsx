@@ -19,12 +19,21 @@ const CreateGroupModal = ({ isOpen, onClose, friends, onGroupCreated }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!groupName.trim() || selectedFriends.length === 0) return;
+        if (selectedFriends.length === 0) return;
+
+        let finalName = groupName.trim();
+        if (!finalName) {
+            const names = selectedFriends
+                .map(uid => friends.find(f => f.uid === uid)?.displayName)
+                .filter(Boolean)
+                .join(', ');
+            finalName = `Group with ${names}`.substring(0, 50); // Limit length
+        }
 
         setIsLoading(true);
         try {
             const newChat = await api.post('/chats/group', {
-                name: groupName,
+                name: finalName,
                 participants: selectedFriends
             });
             onGroupCreated(newChat);
@@ -52,7 +61,7 @@ const CreateGroupModal = ({ isOpen, onClose, friends, onGroupCreated }) => {
 
                 <form onSubmit={handleSubmit} className="p-4">
                     <div className="mb-6">
-                        <label className="block text-gray-400 text-sm font-semibold mb-2">Group Name</label>
+                        <label className="block text-gray-400 text-sm font-semibold mb-2">Group Name <span className="text-gray-600 font-normal">(Optional)</span></label>
                         <input
                             type="text"
                             value={groupName}
@@ -92,7 +101,7 @@ const CreateGroupModal = ({ isOpen, onClose, friends, onGroupCreated }) => {
 
                     <button
                         type="submit"
-                        disabled={!groupName.trim() || selectedFriends.length === 0 || isLoading}
+                        disabled={selectedFriends.length === 0 || isLoading}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                     >
                         {isLoading ? 'Creating...' : 'Create Group'}
