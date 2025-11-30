@@ -1,4 +1,9 @@
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+let envUrl = import.meta.env.VITE_API_URL || '/api';
+envUrl = envUrl.replace(/\/$/, ''); // Remove trailing slash
+if (!envUrl.endsWith('/api')) {
+    envUrl += '/api';
+}
+const API_URL = envUrl;
 
 const getHeaders = () => {
   const token = localStorage.getItem('token');
