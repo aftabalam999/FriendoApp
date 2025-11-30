@@ -3,6 +3,7 @@ const router = express.Router();
 const { db } = require('../config/firebase');
 const authenticateToken = require('../middleware/auth');
 const { getDeterministicChatId } = require('../utils/chatId');
+const { getIo } = require('../socket');
 
 // Get my chats
 router.get('/', authenticateToken, async (req, res) => {
@@ -329,7 +330,7 @@ router.delete('/:chatId/participants/:targetUid', authenticateToken, async (req,
     }
 });
 
-const { getIo } = require('../socket');
+
 
 // Mark messages as seen
 router.post('/:chatId/messages/seen', authenticateToken, async (req, res) => {
