@@ -261,6 +261,7 @@ export default function Home() {
         };
 
         const handleNewMessage = ({ chatId, message, lastMessage }) => {
+            console.log("Received newMessage event:", { chatId, message });
             // Update active chat messages
             if (activeChat?.id === chatId) {
                 setMessages(prev => {
