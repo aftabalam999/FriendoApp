@@ -299,12 +299,28 @@ export default function Home() {
             });
         };
 
+        const handleNewFriendRequest = (request) => {
+            setRequests(prev => [...prev, request]);
+            showToast(`New friend request from ${request.displayName}`, 'info');
+        };
+
+        const handleFriendRequestAccepted = (friend) => {
+            setFriends(prev => [...prev, friend]);
+            setSentRequests(prev => prev.filter(uid => uid !== friend.uid));
+            showToast(`${friend.displayName} accepted your friend request!`, 'success');
+            fetchChats(); // Refresh chats to show the new conversation
+        };
+
         socket.on('messagesSeen', handleMessagesSeen);
         socket.on('newMessage', handleNewMessage);
+        socket.on('newFriendRequest', handleNewFriendRequest);
+        socket.on('friendRequestAccepted', handleFriendRequestAccepted);
 
         return () => {
             socket.off('messagesSeen', handleMessagesSeen);
             socket.off('newMessage', handleNewMessage);
+            socket.off('newFriendRequest', handleNewFriendRequest);
+            socket.off('friendRequestAccepted', handleFriendRequestAccepted);
         };
     }, [socket, activeChat]);
 
