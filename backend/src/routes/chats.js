@@ -174,18 +174,35 @@ router.post('/:chatId/messages', authenticateToken, async (req, res) => {
             senderId: req.user.uid,
             text: text || '',
             media: media || null,
+            seenBy: [req.user.uid],
             createdAt: new Date().toISOString()
         };
 
         const msgRef = await chatRef.collection('messages').add(message);
         
+        const lastMessageData = {
+            id: msgRef.id,
+            text: text ? (text.length > 30 ? text.substring(0, 30) + '...' : text) : 'Sent an attachment',
+            senderId: req.user.uid,
+            seenBy: [req.user.uid],
+            createdAt: message.createdAt
+        };
+
         // Update chat last message
         await chatRef.update({
             lastMessageAt: message.createdAt,
-            lastMessage: {
-                text: text ? (text.length > 30 ? text.substring(0, 30) + '...' : text) : 'Sent an attachment',
-                senderId: req.user.uid
-            }
+            lastMessage: lastMessageData
+        });
+
+        // Notify participants via socket
+        const io = getIo();
+        const participants = chatDoc.data().participants;
+        participants.forEach(pUid => {
+            io.to(pUid).emit('newMessage', {
+                chatId,
+                message: { id: msgRef.id, ...message },
+                lastMessage: lastMessageData
+            });
         });
 
         res.json({ id: msgRef.id, ...message });
@@ -306,6 +323,82 @@ router.delete('/:chatId/participants/:targetUid', authenticateToken, async (req,
         });
 
         res.json({ success: true });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+const { getIo } = require('../socket');
+
+// Mark messages as seen
+router.post('/:chatId/messages/seen', authenticateToken, async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const uid = req.user.uid;
+
+        const chatRef = db.collection('chats').doc(chatId);
+        const chatDoc = await chatRef.get();
+        
+        if (!chatDoc.exists || !chatDoc.data().participants.includes(uid)) {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+
+        // Get recent messages
+        // We fetch last 50 messages and filter in memory to avoid complex Firestore index requirements
+        // (where senderId != uid AND orderBy createdAt requires a composite index)
+        const snapshot = await chatRef.collection('messages')
+            .orderBy('createdAt', 'desc')
+            .limit(50)
+            .get();
+
+        const batch = db.batch();
+        let updatedCount = 0;
+        const updatedMessageIds = [];
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            // Only mark messages sent by others that I haven't seen yet
+            if (data.senderId !== uid) {
+                const seenBy = data.seenBy || [];
+                if (!seenBy.includes(uid)) {
+                    batch.update(doc.ref, {
+                        seenBy: [...seenBy, uid]
+                    });
+                    updatedCount++;
+                    updatedMessageIds.push(doc.id);
+                }
+            }
+        });
+
+        if (updatedCount > 0) {
+            // Check if lastMessage needs update
+            const lastMessage = chatDoc.data().lastMessage;
+            if (lastMessage && updatedMessageIds.includes(lastMessage.id)) {
+                const updatedSeenBy = [...(lastMessage.seenBy || []), uid];
+                // Ensure uniqueness just in case
+                const uniqueSeenBy = [...new Set(updatedSeenBy)];
+                
+                await chatRef.update({
+                    'lastMessage.seenBy': uniqueSeenBy
+                });
+            }
+
+            await batch.commit();
+            
+            // Notify other participants
+            const io = getIo();
+            const otherParticipants = chatDoc.data().participants.filter(p => p !== uid);
+            otherParticipants.forEach(pUid => {
+                io.to(pUid).emit('messagesSeen', {
+                    chatId,
+                    messageIds: updatedMessageIds,
+                    seenBy: uid
+                });
+            });
+        }
+
+        res.json({ success: true, updatedCount });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });

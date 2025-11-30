@@ -17,76 +17,158 @@ export const SocketProvider = ({ children }) => {
     const [callEnded, setCallEnded] = useState(false);
     const [name, setName] = useState('');
     const [isCalling, setIsCalling] = useState(false);
+    const [callPartnerId, setCallPartnerId] = useState(null);
 
     const myVideo = useRef();
-    const userVideo = useRef();
     const connectionRef = useRef();
-    const socket = useRef();
+    const [socket, setSocket] = useState(null);
+    const streamRef = useRef();
+
+    const callEndedRef = useRef(false);
+
+    useEffect(() => {
+        streamRef.current = stream;
+    }, [stream]);
 
     useEffect(() => {
         if (user) {
-            socket.current = io('http://localhost:3000');
+            // Use window.location.hostname to allow testing on LAN (e.g. phone + laptop)
+            const socketUrl = `http://${window.location.hostname}:3000`;
+            const newSocket = io(socketUrl);
+            setSocket(newSocket);
 
-            socket.current.on('connect', () => {
-                socket.current.emit('join-room', user.uid);
+            newSocket.on('connect', () => {
+                newSocket.emit('join-room', user.uid);
             });
 
-            socket.current.on('me', (id) => setMe(id));
-
-            socket.current.on('callUser', ({ from, name: callerName, signal, isVideo }) => {
-                setCall({ isReceivingCall: true, from, name: callerName, signal, isVideo });
+            newSocket.on('connect_error', (err) => {
+                console.error('Socket connection error:', err);
             });
 
-            socket.current.on('callEnded', () => {
-                setCallEnded(true);
+            newSocket.on('me', (id) => setMe(id));
+
+            newSocket.on('callUser', ({ from, name: callerName, photoURL, signal, isVideo }) => {
+                if (callEndedRef.current) {
+                    callEndedRef.current = false;
+                }
+                setCallEnded(false);
+                setCall({ isReceivingCall: true, from, name: callerName, photoURL, signal, isVideo });
+            });
+
+            newSocket.on('callAccepted', (signal) => {
+                setCallAccepted(true);
                 setIsCalling(false);
-                if (connectionRef.current) connectionRef.current.destroy();
-                window.location.reload();
+                if (connectionRef.current) {
+                    connectionRef.current.signal(signal);
+                }
             });
+
+            newSocket.on('callEnded', () => {
+                handleCallEnd();
+            });
+
+            return () => newSocket.disconnect();
         }
     }, [user]);
 
     const answerCall = () => {
         setCallAccepted(true);
+        setCallPartnerId(call.from);
+        setCallEnded(false);
+        callEndedRef.current = false;
 
-        const constraints = { video: call.isVideo, audio: true };
+        // Default to video if isVideo is undefined
+        const isVideoCall = call.isVideo !== false;
+        const constraints = { video: isVideoCall, audio: true };
 
         navigator.mediaDevices.getUserMedia(constraints)
             .then((currentStream) => {
-                setStream(currentStream);
+                if (callEndedRef.current) {
+                    currentStream.getTracks().forEach(t => t.stop());
+                    return;
+                }
 
-                const peer = new Peer({ initiator: false, trickle: false, stream: currentStream });
+                setStream(currentStream);
+                window.localStream = currentStream;
+
+                const peer = new Peer({
+                    initiator: false,
+                    trickle: false,
+                    stream: currentStream,
+                    config: {
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:global.stun.twilio.com:3478' }
+                        ]
+                    }
+                });
 
                 peer.on('signal', (data) => {
-                    socket.current.emit('answerCall', { signal: data, to: call.from });
+                    socket.emit('answerCall', { signal: data, to: call.from });
                 });
 
                 peer.on('stream', (currentRemoteStream) => {
                     setRemoteStream(currentRemoteStream);
                 });
 
+                peer.on('close', () => {
+                    handleCallEnd();
+                });
+
+                peer.on('error', (err) => {
+                    console.error("Peer error (answerCall):", err);
+                    handleCallEnd();
+                });
+
                 peer.signal(call.signal);
                 connectionRef.current = peer;
             })
-            .catch((err) => console.error('Failed to get local stream', err));
+            .catch((err) => {
+                console.error('Failed to get local stream (answerCall)', err);
+                alert(`Failed to access camera/microphone: ${err.message}. Please check permissions.`);
+                handleCallEnd();
+            });
     };
 
-    const callUser = (id, isVideo = true) => {
+    const callUser = (id, partnerName, partnerPhotoURL, isVideo = true) => {
         setIsCalling(true);
+        setCallPartnerId(id);
+        setCallEnded(false);
+        callEndedRef.current = false;
+        // Store call type for UI - store partner's photo for my view
+        setCall({ isVideo, isReceivingCall: false, from: me, name: partnerName, photoURL: partnerPhotoURL });
+
         const constraints = { video: isVideo, audio: true };
 
         navigator.mediaDevices.getUserMedia(constraints)
             .then((currentStream) => {
-                setStream(currentStream);
+                if (callEndedRef.current) {
+                    currentStream.getTracks().forEach(t => t.stop());
+                    return;
+                }
 
-                const peer = new Peer({ initiator: true, trickle: false, stream: currentStream });
+                setStream(currentStream);
+                window.localStream = currentStream;
+
+                const peer = new Peer({
+                    initiator: true,
+                    trickle: false,
+                    stream: currentStream,
+                    config: {
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:global.stun.twilio.com:3478' }
+                        ]
+                    }
+                });
 
                 peer.on('signal', (data) => {
-                    socket.current.emit('callUser', {
+                    socket.emit('callUser', {
                         userToCall: id,
                         signalData: data,
                         from: me,
                         name: user.displayName,
+                        photoURL: user.photoURL, // Send my photo to them
                         isVideo
                     });
                 });
@@ -95,65 +177,66 @@ export const SocketProvider = ({ children }) => {
                     setRemoteStream(currentRemoteStream);
                 });
 
-                socket.current.on('callAccepted', (signal) => {
-                    setCallAccepted(true);
-                    setIsCalling(false);
-                    peer.signal(signal);
+                peer.on('close', () => {
+                    handleCallEnd();
+                });
+
+                peer.on('error', (err) => {
+                    console.error("Peer error (callUser):", err);
+                    handleCallEnd();
                 });
 
                 connectionRef.current = peer;
             })
             .catch((err) => {
                 console.error('Failed to get local stream', err);
+                alert(`Failed to access camera/microphone: ${err.message}. Please check permissions.`);
                 setIsCalling(false);
             });
     };
 
-    const leaveCall = () => {
+    const handleCallEnd = () => {
         setCallEnded(true);
+        callEndedRef.current = true;
         setIsCalling(false);
+        setCallAccepted(false);
+        setCallPartnerId(null);
+        setCall({});
+        setRemoteStream(null);
 
-        // Notify other user
-        if (callAccepted && !callEnded) {
-            const partnerId = call.isReceivingCall ? call.from : call.userToCall;
-            // Note: We might need to store 'userToCall' ID in state if we initiated the call
-            // For now, let's rely on the socket server to broadcast or handle it if we don't have the ID handy
-            // Actually, the server 'endCall' expects { to: ... }
-            // If we are the caller, we know who we called. If we are receiver, we know who called us.
-            // But 'callUser' function doesn't store 'userToCall' in state. Let's fix that.
+        if (connectionRef.current) {
+            connectionRef.current.destroy();
+            connectionRef.current = null;
         }
 
-        // Ideally we should emit 'endCall' here. 
-        // However, since we don't easily have the partner's ID in all cases without extra state, 
-        // let's use the 'disconnect' logic on server or try to emit if we have data.
-        // But wait, the server 'endCall' requires 'to'. 
+        // Aggressively stop all known streams
+        const streamsToStop = [stream, streamRef.current, window.localStream];
+        streamsToStop.forEach(s => {
+            if (s) {
+                s.getTracks().forEach(track => {
+                    track.stop();
+                    track.enabled = false;
+                });
+            }
+        });
 
-        // Let's simplify: The server already broadcasts 'callEnded' on disconnect. 
-        // If we just reload the page, the socket disconnects, and the server notifies the other user.
-        // So simply reloading might be enough IF the server handles disconnect correctly.
-        // Server code: socket.on('disconnect', () => socket.broadcast.emit("callEnded"));
-        // This broadcasts to EVERYONE. That's bad. It should be to the room or specific user.
-        // But for now, let's stick to the requested behavior: "dono me se kisi ek ne v call cut kar de to dono ka call cut ho jaye"
+        setStream(null);
+        streamRef.current = null;
+        window.localStream = null;
+    };
 
-        // If I reload, socket disconnects -> server sees disconnect -> server broadcasts callEnded -> other user receives callEnded -> other user reloads.
-        // This seems to achieve the goal without extra code, BUT the server broadcast is too broad (all users).
-        // We should fix the server to only notify the partner.
+    const leaveCall = () => {
+        let targetId = callPartnerId;
 
-        // But I can't easily change the server logic to know who the partner is without storing room info.
-        // The server currently joins a room with userId.
-
-        // Let's try to emit 'endCall' with the best guess of ID.
-        // If we received a call, 'call.from' is the partner.
-        // If we initiated, we don't have it in 'call' state.
-
-        // Let's just reload for now, as it triggers disconnect.
-        // And I will update the server to be smarter about 'callEnded' if needed, but the user didn't ask to fix server broadcast issues, just to ensure both cut.
-
-        if (connectionRef.current) connectionRef.current.destroy();
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
+        // If we are the receiver and haven't set callPartnerId yet (e.g. rejecting call)
+        if (!targetId && call.isReceivingCall) {
+            targetId = call.from;
         }
-        window.location.reload();
+
+        if (targetId) {
+            socket.emit('endCall', { to: targetId });
+        }
+        handleCallEnd();
     };
 
     return (
@@ -161,9 +244,8 @@ export const SocketProvider = ({ children }) => {
             call,
             callAccepted,
             myVideo,
-            userVideo,
-            stream,
             remoteStream,
+            stream,
             name,
             setName,
             callEnded,
@@ -172,7 +254,8 @@ export const SocketProvider = ({ children }) => {
             leaveCall,
             answerCall,
             setStream,
-            isCalling
+            isCalling,
+            socket
         }}>
             {children}
         </SocketContext.Provider>

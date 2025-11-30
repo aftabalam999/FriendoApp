@@ -1,231 +1,152 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { useSocket } from '../context/SocketContext';
-import { Phone, PhoneOff, Video } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff } from 'lucide-react';
 
-const VideoCall = () => {
-    const {
-        call,
-        callAccepted,
-        myVideo,
-        userVideo,
-        stream,
-        remoteStream,
-        callEnded,
-        leaveCall,
-        answerCall,
-        isCalling
-    } = useSocket();
+export default function VideoCall() {
+    const { name, callAccepted, myVideo, remoteStream, callEnded, stream, call, answerCall, leaveCall, isCalling } = useSocket();
+    const { user } = useAuth();
+    const remoteVideoRef = React.useRef();
+    const [imgError, setImgError] = useState(false);
 
-    const [position, setPosition] = useState({ x: 0, y: 0 });
-    const [isDragging, setIsDragging] = useState(false);
-    const dragRef = useRef(null);
-    const offsetRef = useRef({ x: 0, y: 0 });
 
-    // Initialize position to bottom-right on mount
-    useEffect(() => {
-        setPosition({
-            x: window.innerWidth - 220, // Approximate width + margin
-            y: window.innerHeight - 320 // Approximate height + margin
-        });
-    }, []);
 
-    useEffect(() => {
-        if (myVideo.current && stream) {
-            myVideo.current.srcObject = stream;
-            myVideo.current.play().catch(err => console.error("Failed to play local video:", err));
+    const setLocalVideoRef = useCallback((node) => {
+        if (node && stream) {
+            node.srcObject = stream;
+            node.play().catch(e => console.error("Failed to play local video:", e));
+            myVideo.current = node;
         }
-    }, [stream, myVideo]);
+    }, [stream]);
 
-    useEffect(() => {
-        if (userVideo.current && remoteStream) {
-            userVideo.current.srcObject = remoteStream;
-            userVideo.current.play().catch(err => console.error("Failed to play remote video:", err));
+    const setRemoteVideoRef = useCallback((node) => {
+        if (node && remoteStream) {
+            node.srcObject = remoteStream;
+            node.play().catch(e => console.error("Failed to play remote video:", e));
+            remoteVideoRef.current = node;
         }
-    }, [remoteStream, userVideo]);
+    }, [remoteStream]);
 
-    const handleMouseDown = (e) => {
-        setIsDragging(true);
-        const rect = dragRef.current.getBoundingClientRect();
-        offsetRef.current = {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
-        };
-    };
-
-    const handleMouseMove = (e) => {
-        if (!isDragging) return;
-        e.preventDefault();
-        const newX = e.clientX - offsetRef.current.x;
-        const newY = e.clientY - offsetRef.current.y;
-
-        // Boundary checks
-        const maxX = window.innerWidth - dragRef.current.offsetWidth;
-        const maxY = window.innerHeight - dragRef.current.offsetHeight;
-
-        setPosition({
-            x: Math.min(Math.max(0, newX), maxX),
-            y: Math.min(Math.max(0, newY), maxY)
-        });
-    };
-
-    const handleMouseUp = () => {
-        setIsDragging(false);
-    };
-
+    // Cleanup effect to ensure camera is turned off when component unmounts
     useEffect(() => {
-        if (isDragging) {
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
-        } else {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
-        }
         return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+            if (stream) {
+                console.log("VideoCall unmounting, stopping tracks");
+                stream.getTracks().forEach(track => track.stop());
+            }
         };
-    }, [isDragging]);
+    }, [stream]);
 
-    if (!call.isReceivingCall && !callAccepted && !isCalling) return null;
+    if (!isCalling && !call.isReceivingCall && !callAccepted) return null;
 
-    // Audio Call UI
-    if (callAccepted && !callEnded && (!remoteStream || remoteStream.getVideoTracks().length === 0)) {
-        return (
-            <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center overflow-hidden">
-                <div className="flex flex-col md:flex-row w-full h-full">
-                    {/* Remote User (Top/Left) */}
-                    <div className="relative w-full md:w-1/2 h-1/2 md:h-full flex items-center justify-center overflow-hidden border-b md:border-b-0 md:border-r border-gray-800">
-                        {/* Blurred Background */}
-                        <div className="absolute inset-0 bg-gray-900">
-                            <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 to-purple-900/20 backdrop-blur-3xl" />
-                        </div>
-
-                        {/* Avatar */}
-                        <div className="relative z-10 flex flex-col items-center animate-pulse">
-                            <div className="w-32 h-32 md:w-48 md:h-48 rounded-full bg-gray-700 flex items-center justify-center border-4 border-gray-600 shadow-2xl mb-4">
-                                <span className="text-5xl md:text-7xl font-bold text-white">
-                                    {call.name ? call.name[0].toUpperCase() : 'U'}
-                                </span>
-                            </div>
-                            <h3 className="text-2xl md:text-3xl font-bold text-white">{call.name || 'User'}</h3>
-                            <p className="text-gray-400 mt-2">Connected</p>
-                        </div>
-                    </div>
-
-                    {/* Local User (Bottom/Right) */}
-                    <div className="relative w-full md:w-1/2 h-1/2 md:h-full flex items-center justify-center overflow-hidden">
-                        {/* Blurred Background */}
-                        <div className="absolute inset-0 bg-gray-900">
-                            <div className="absolute inset-0 bg-gradient-to-tl from-emerald-900/20 to-teal-900/20 backdrop-blur-3xl" />
-                        </div>
-
-                        {/* Avatar */}
-                        <div className="relative z-10 flex flex-col items-center">
-                            <div className="w-32 h-32 md:w-48 md:h-48 rounded-full bg-gray-700 flex items-center justify-center border-4 border-gray-600 shadow-2xl mb-4">
-                                <span className="text-5xl md:text-7xl font-bold text-white">You</span>
-                            </div>
-                            <h3 className="text-2xl md:text-3xl font-bold text-white">You</h3>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Controls */}
-                <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center space-x-8 z-30">
-                    <button onClick={leaveCall} className="bg-red-500 p-4 rounded-full hover:bg-red-600 transition-colors shadow-lg">
-                        <PhoneOff size={32} />
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    // Video Call UI
     return (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center overflow-hidden">
-            {/* Main Video Container */}
-            <div className="relative w-full h-full flex items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
+            {/* Incoming Call Modal */}
+            {call.isReceivingCall && !callAccepted && (
+                <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl text-center border border-gray-700 animate-fade-in">
+                    <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center text-3xl font-bold text-white shadow-lg overflow-hidden">
+                        {call.photoURL && !imgError ? (
+                            <img
+                                src={call.photoURL}
+                                alt={call.name}
+                                className="w-full h-full object-cover"
+                                onError={() => setImgError(true)}
+                            />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-white">
+                                {call.name?.charAt(0).toUpperCase() || 'U'}
+                            </div>
+                        )}
+                    </div>
+                    <h1 className="text-2xl font-bold text-white mb-2">{call.name || 'Unknown User'}</h1>
+                    <p className="text-gray-400 mb-8">Incoming Video Call...</p>
+                    <div className="flex justify-center space-x-6">
+                        <button
+                            onClick={answerCall}
+                            className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg transform hover:scale-110 transition-all duration-200"
+                        >
+                            <VideoIcon size={32} />
+                        </button>
+                        <button
+                            onClick={leaveCall}
+                            className="bg-red-500 hover:bg-red-600 text-white p-4 rounded-full shadow-lg transform hover:scale-110 transition-all duration-200"
+                        >
+                            <PhoneOff size={32} />
+                        </button>
+                    </div>
+                </div>
+            )}
 
-                {/* Remote Video (Full Screen) */}
-                {callAccepted && !callEnded ? (
-                    <div className="w-full h-full">
+            {/* Active Call UI */}
+            {callAccepted && !callEnded && (
+                <div className="relative w-full h-full flex flex-col">
+                    {/* Remote Video Area */}
+                    <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
                         <video
                             playsInline
-                            ref={userVideo}
+                            ref={setRemoteVideoRef}
                             autoPlay
                             className="w-full h-full object-cover"
                         />
-                        <div className="absolute top-4 left-4 bg-black/50 px-4 py-2 rounded-lg text-white font-semibold z-10">
-                            {call.name || 'User'}
+
+                        <div className="absolute top-4 left-4 bg-black/40 px-4 py-2 rounded-lg backdrop-blur-sm">
+                            <p className="text-white font-semibold shadow-sm">{call.name || 'User'}</p>
                         </div>
                     </div>
-                ) : (
-                    /* Placeholder or Self Video when not connected yet */
-                    <div className="flex flex-col items-center justify-center h-full text-white">
-                        <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mb-4 animate-pulse">
-                            {call.isVideo ? <Video size={40} /> : <Phone size={40} />}
+
+                    {/* Local Video (Picture-in-Picture) */}
+                    {stream && (
+                        <div className="absolute top-4 right-4 w-32 h-48 md:w-48 md:h-72 bg-gray-800 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 z-[100] transition-shadow hover:shadow-white/40">
+                            <video
+                                playsInline
+                                muted
+                                ref={setLocalVideoRef}
+                                autoPlay
+                                className="w-full h-full object-cover pointer-events-none transform scale-x-[-1]"
+                            />
+                            <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white pointer-events-none">
+                                You
+                            </div>
                         </div>
-                        <p className="text-xl font-semibold">
-                            {isCalling ? 'Calling...' : (call.isReceivingCall ? `${call.name} is calling...` : 'Connecting...')}
-                        </p>
-                        {call.isReceivingCall && (
-                            <p className="text-gray-400 mt-2">{call.isVideo ? 'Incoming Video Call' : 'Incoming Audio Call'}</p>
+                    )}
+
+                    {/* Controls Bar */}
+                    <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center space-x-6 bg-gray-900/80 backdrop-blur-md px-8 py-4 rounded-full border border-white/10 shadow-2xl z-[100]">
+                        <button className="p-4 rounded-full bg-gray-700/50 text-white hover:bg-gray-600 transition-colors">
+                            <Mic size={24} />
+                        </button>
+                        <button
+                            onClick={leaveCall}
+                            className="p-4 rounded-full bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/30 transform hover:scale-105 transition-all"
+                        >
+                            <PhoneOff size={28} />
+                        </button>
+                        <button className="p-4 rounded-full bg-gray-700/50 text-white hover:bg-gray-600 transition-colors">
+                            <VideoIcon size={24} />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Calling State (Outgoing) */}
+            {isCalling && !callAccepted && (
+                <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl text-center border border-gray-700 animate-pulse">
+                    <div className="w-24 h-24 rounded-full mx-auto mb-4 overflow-hidden border-4 border-gray-600">
+                        {call.photoURL && !imgError ? <img src={call.photoURL} className="w-full h-full object-cover" onError={() => setImgError(true)} /> : (
+                            <div className="w-full h-full bg-gray-700 flex items-center justify-center">
+                                <VideoIcon size={32} className="text-gray-400" />
+                            </div>
                         )}
                     </div>
-                )}
-
-                {/* Local Video (Draggable Picture-in-Picture) */}
-                {stream && stream.getVideoTracks().length > 0 && (
-                    <div
-                        ref={dragRef}
-                        onMouseDown={handleMouseDown}
-                        style={{
-                            left: `${position.x}px`,
-                            top: `${position.y}px`,
-                            cursor: isDragging ? 'grabbing' : 'grab',
-                            position: 'absolute'
-                        }}
-                        className="w-32 h-48 md:w-48 md:h-72 bg-gray-900 rounded-xl overflow-hidden shadow-2xl border-2 border-gray-800 z-20 transition-shadow hover:shadow-white/20"
+                    <h2 className="text-xl font-bold text-white mb-2">Calling {call.name}...</h2>
+                    <button
+                        onClick={leaveCall}
+                        className="mt-6 bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-full transition-colors"
                     >
-                        <video
-                            playsInline
-                            muted
-                            ref={myVideo}
-                            autoPlay
-                            onLoadedMetadata={() => myVideo.current?.play()}
-                            className="w-full h-full object-cover pointer-events-none"
-                        />
-                        <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white pointer-events-none">
-                            You
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Controls */}
-            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center space-x-8 z-30">
-                {/* Outgoing Call - Cancel */}
-                {isCalling && !callAccepted && (
-                    <button onClick={leaveCall} className="bg-red-500 p-4 rounded-full hover:bg-red-600 transition-colors shadow-lg">
-                        <PhoneOff size={32} />
+                        Cancel
                     </button>
-                )}
-
-                {/* Incoming Call - Answer */}
-                {call.isReceivingCall && !callAccepted && (
-                    <button onClick={answerCall} className="bg-green-500 p-4 rounded-full hover:bg-green-600 transition-colors shadow-lg animate-bounce">
-                        {call.isVideo ? <Video size={32} /> : <Phone size={32} />}
-                    </button>
-                )}
-
-                {/* In Call - End */}
-                {callAccepted && !callEnded && (
-                    <button onClick={leaveCall} className="bg-red-500 p-4 rounded-full hover:bg-red-600 transition-colors shadow-lg">
-                        <PhoneOff size={32} />
-                    </button>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
-};
-
-export default VideoCall;
+}
