@@ -32,8 +32,9 @@ export const SocketProvider = ({ children }) => {
 
     useEffect(() => {
         if (user) {
-            // Use window.location.hostname to allow testing on LAN (e.g. phone + laptop)
-            const socketUrl = `http://${window.location.hostname}:3000`;
+            // Use environment variable for production, fallback to local for dev
+            const socketUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:3000`;
+            console.log("Connecting to socket at:", socketUrl);
             const newSocket = io(socketUrl);
             setSocket(newSocket);
 

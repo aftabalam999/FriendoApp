@@ -39,6 +39,18 @@ router.post('/request/:uid', authenticateToken, async (req, res) => {
       createdAt: new Date().toISOString()
     });
 
+    // Emit socket event
+    try {
+        const io = require('../socket').getIo();
+        const userDoc = await db.collection('users').doc(fromUid).get();
+        if (userDoc.exists) {
+            const { password, ...safeUser } = userDoc.data();
+            io.to(toUid).emit('newFriendRequest', safeUser);
+        }
+    } catch (e) {
+        console.error('Socket emit error:', e);
+    }
+
     res.json({ message: 'Request sent' });
   } catch (error) {
     console.error(error);
@@ -94,6 +106,18 @@ router.post('/accept/:uid', authenticateToken, async (req, res) => {
             createdAt: now,
             media: null
         });
+    }
+
+    // Emit socket event to the sender that request was accepted
+    try {
+        const io = require('../socket').getIo();
+        const userDoc = await db.collection('users').doc(toUid).get();
+        if (userDoc.exists) {
+            const { password, ...safeUser } = userDoc.data();
+            io.to(fromUid).emit('friendRequestAccepted', safeUser);
+        }
+    } catch (e) {
+        console.error('Socket emit error:', e);
     }
 
     res.json({ message: 'Request accepted' });
