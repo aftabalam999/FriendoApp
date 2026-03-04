@@ -18,5 +18,20 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
+  },
+  build: {
+    sourcemap: false,           // no source maps in production (smaller bundle)
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-socket': ['socket.io-client'],
+          'vendor-peer': ['simple-peer'],
+          'vendor-icons': ['lucide-react'],
+        }
+      }
+    },
+    assetsInlineLimit: 4096,    // inline assets < 4kb as base64
   }
 })

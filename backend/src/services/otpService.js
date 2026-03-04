@@ -1,21 +1,22 @@
 const nodemailer = require('nodemailer');
 
-// In-memory OTP store: { "email_or_phone": { otp, expiresAt } }
+// In-memory OTP store: { "email": { otp, expiresAt } }
+// NOTE: On Vercel/serverless this resets per invocation. For Render (persistent) it works fine.
 const otpStore = {};
 
-const generateOTP = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-};
+const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-const createTransporter = () => {
-    return nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-    });
-};
+// Create transporter ONCE at startup — reused across all requests (faster)
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    pool: true,           // reuse connections
+    maxConnections: 3,
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+});
+
 
 /**
  * Store a new OTP (valid for 10 minutes) for a given key (email or phone)
@@ -45,10 +46,9 @@ const verifyOTP = (key, inputOtp) => {
 };
 
 /**
- * Send OTP via email using Gmail SMTP
+ * Send OTP via email using Gmail SMTP (shared transporter)
  */
 const sendEmailOTP = async (email, otp) => {
-    const transporter = createTransporter();
     await transporter.sendMail({
         from: `"Friendo App" <${process.env.EMAIL_USER}>`,
         to: email,
@@ -72,3 +72,4 @@ const sendEmailOTP = async (email, otp) => {
 };
 
 module.exports = { storeOTP, verifyOTP, sendEmailOTP };
+
