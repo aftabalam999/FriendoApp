@@ -32,10 +32,16 @@ export const SocketProvider = ({ children }) => {
 
     useEffect(() => {
         if (user) {
-            // Use environment variable for production, fallback to local for dev
             const socketUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:3000`;
             console.log("Connecting to socket at:", socketUrl);
-            const newSocket = io(socketUrl);
+
+            const newSocket = io(socketUrl, {
+                reconnectionAttempts: 3,       // stop after 3 failed attempts
+                reconnectionDelay: 2000,        // wait 2s between retries
+                timeout: 5000,                  // give up connecting after 5s
+                transports: ['websocket'],      // don't fall back to polling (avoids 404 flood)
+            });
+
             setSocket(newSocket);
 
             newSocket.on('connect', () => {
@@ -43,7 +49,13 @@ export const SocketProvider = ({ children }) => {
             });
 
             newSocket.on('connect_error', (err) => {
-                console.error('Socket connection error:', err);
+                // Silently fail — backend may not support WebSockets (Vercel serverless)
+                console.warn('Socket unavailable (real-time features disabled):', err.message);
+            });
+
+            newSocket.on('reconnect_failed', () => {
+                console.warn('Socket reconnection exhausted. Real-time features are disabled on this deployment.');
+                newSocket.disconnect(); // stop all future attempts
             });
 
             newSocket.on('me', (id) => setMe(id));
@@ -71,6 +83,7 @@ export const SocketProvider = ({ children }) => {
             return () => newSocket.disconnect();
         }
     }, [user]);
+
 
     const answerCall = () => {
         setCallAccepted(true);
