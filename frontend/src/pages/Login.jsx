@@ -9,7 +9,7 @@ const friendlyError = (msg = '') => {
     if (m.includes('invalid credentials')) return '❌ Wrong username or password.';
     if (m.includes('network') || m.includes('fetch')) return '🌐 Network error — please check your internet connection.';
     if (m.includes('aborted') || m.includes('signal is aborted') || m.includes('timeout'))
-        return '⏳ The server is waking up after being asleep (Render free tier). Please try clicking LOGIN again in 5-10 seconds!';
+        return '⏳ The server error! PLease try again';
     return msg;
 };
 
