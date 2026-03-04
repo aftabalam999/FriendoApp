@@ -389,8 +389,8 @@ export default function Home() {
         <div className="flex h-[100dvh] bg-[#FAFBFF] font-sans text-gray-800 overflow-hidden relative">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-            {/* LEFT SIDEBAR (Purple Area) */}
-            <div className={`fixed md:relative z-40 w-64 md:w-[260px] h-full bg-[#7042f4] text-white flex flex-col py-8 rounded-r-[32px] md:rounded-r-[40px] transition-transform duration-300 shadow-[10px_0_30px_rgba(112,66,244,0.15)] ${!activeChat && activeTab ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} `}>
+            {/* LEFT SIDEBAR — hidden on mobile, always visible on desktop */}
+            <div className="hidden md:flex md:relative z-40 w-[260px] h-full bg-[#7042f4] text-white flex-col py-8 rounded-r-[40px] shadow-[10px_0_30px_rgba(112,66,244,0.15)] shrink-0">
                 <div className="flex flex-col h-full shrink-0">
                     <div className="px-8 flex items-center justify-between mb-12 cursor-pointer hover:opacity-80 transition-opacity">
                         <div className="flex items-center space-x-3">
@@ -445,7 +445,7 @@ export default function Home() {
             </div>
 
             {/* MAIN CONTENT AREA */}
-            <div className="flex-1 flex flex-col relative w-full h-full overflow-hidden">
+            <div className="flex-1 flex flex-col relative w-full h-full overflow-hidden min-w-0">
                 {/* TWO-COLUMN LAYOUT */}
                 <div className="flex-1 flex flex-row overflow-hidden md:mx-6 lg:mx-8 mb-4 md:mb-6 rounded-[24px] md:shadow-[0_8px_40px_rgba(0,0,0,0.04)] border-gray-100/80 md:border bg-white mt-4 md:mt-6">
 
@@ -457,7 +457,7 @@ export default function Home() {
                             <img src={user.photoURL} className="w-8 h-8 rounded-full shadow cursor-pointer" />
                         </div>
 
-                        <div className="p-1 md:p-6 pb-20 md:pb-6 overflow-y-auto flex-1 custom-scroll">
+                        <div className="p-1 md:p-6 pb-24 md:pb-6 overflow-y-auto flex-1 custom-scroll">
                             <div className="flex justify-between items-center mb-6 px-4 md:px-0 mt-4 md:mt-0">
                                 <h2 className="text-2xl md:text-xl font-bold text-gray-800 capitalize tracking-tight">{activeTab === 'messages' ? 'Recent' : activeTab}</h2>
                             </div>
@@ -566,7 +566,7 @@ export default function Home() {
                     </div>
 
                     {/* RIGHT CHAT COLUMN */}
-                    <div className={`flex-1 flex flex-col bg-white overflow-hidden relative ${activeChat ? 'flex' : 'hidden md:flex'}`}>
+                    <div className={`flex-1 flex flex-col bg-white overflow-hidden relative min-w-0 ${activeChat ? 'flex' : 'hidden md:flex'}`}>
                         {activeChat ? (
                             <>
                                 {/* Chat Header */}
@@ -664,7 +664,7 @@ export default function Home() {
                                 </div>
 
                                 {/* Chat Input Area */}
-                                <div className="p-4 md:p-6 bg-white shrink-0 w-full mb-16 md:mb-0">
+                                <div className="p-3 md:p-6 bg-white shrink-0 w-full safe-area-pb">
                                     <form onSubmit={sendMessage} className="flex flex-wrap md:flex-nowrap items-center border border-gray-100 shadow-[0_2px_15px_rgba(0,0,0,0.02)] rounded-full px-2 py-2 bg-[#FAFBFF] w-full lg:w-[95%] xl:w-[85%] mx-auto transition-all focus-within:shadow-[0_2px_20px_rgba(0,0,0,0.05)] focus-within:border-purple-200">
                                         <input type="text" value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} placeholder="Type your message ..." className="flex-1 bg-transparent text-gray-800 px-5 py-2.5 font-medium focus:outline-none placeholder-gray-400 text-[14.5px] min-w-[50%]" />
 
@@ -680,7 +680,7 @@ export default function Home() {
                                             {isUploading ? <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div> : <Send size={18} className="translate-x-[2px] -translate-y-[1px]" />}
                                         </button>
                                     </form>
-                                    <p className="text-center text-[10px] text-gray-300 font-bold uppercase tracking-wider mt-5">Protected by end-to-end encryption</p>
+                                    <p className="text-center text-[10px] text-gray-300 font-bold uppercase tracking-wider mt-3 mb-1 hidden md:block">Protected by end-to-end encryption</p>
                                 </div>
                             </>
                         ) : (
@@ -695,18 +695,29 @@ export default function Home() {
                     </div>
                 </div>
 
-                {/* Mobile Bottom Navigation Bar (replaces sidebar on small screens) */}
-                <div className={`md:hidden fixed bottom-0 z-[60] left-0 right-0 bg-white border-t border-gray-100 flex justify-around items-center h-16 ${activeChat ? 'hidden' : 'flex'}`}>
-                    <div onClick={() => setActiveTab('messages')} className={`p-2.5 rounded-2xl flex items-center justify-center relative transition ${activeTab === 'messages' ? 'text-[#7042f4] bg-purple-50' : 'text-gray-400 hover:text-[#7042f4]'}`}>
-                        <MessageCircle size={24} />
-                        {hasUnreadMessages && <span className="absolute top-2 right-2.5 w-2 h-2 rounded-full bg-[#FF8FA3] border border-white"></span>}
+                {/* Mobile Bottom Navigation Bar */}
+                <div className={`md:hidden fixed bottom-0 z-[60] left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-100 flex justify-around items-center h-16 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] ${activeChat ? 'hidden' : 'flex'}`}>
+                    <div onClick={() => setActiveTab('messages')} className={`flex flex-col items-center gap-1 px-5 py-2 rounded-2xl transition ${activeTab === 'messages' ? 'text-[#7042f4]' : 'text-gray-400'}`}>
+                        <MessageCircle size={22} />
+                        <span className="text-[9px] font-bold uppercase tracking-wider">Chats</span>
+                        {hasUnreadMessages && <span className="absolute top-2 w-2 h-2 rounded-full bg-[#FF8FA3] border border-white"></span>}
                     </div>
-                    <div onClick={() => setActiveTab('friends')} className={`p-2.5 rounded-2xl flex items-center justify-center relative transition ${activeTab === 'friends' ? 'text-[#7042f4] bg-purple-50' : 'text-gray-400 hover:text-[#7042f4]'}`}>
-                        <Users size={24} />
-                        {requests.length > 0 && <span className="absolute top-2 right-2.5 w-2 h-2 rounded-full bg-[#FF8FA3] border border-white"></span>}
+                    <div onClick={() => setActiveTab('friends')} className={`flex flex-col items-center gap-1 px-5 py-2 rounded-2xl relative transition ${activeTab === 'friends' ? 'text-[#7042f4]' : 'text-gray-400'}`}>
+                        <Users size={22} />
+                        <span className="text-[9px] font-bold uppercase tracking-wider">People</span>
+                        {requests.length > 0 && <span className="absolute top-1.5 right-3 w-4 h-4 rounded-full bg-[#FF8FA3] border border-white text-white text-[9px] flex items-center justify-center font-bold">{requests.length}</span>}
                     </div>
-                    <div onClick={() => setActiveTab('search')} className={`p-2.5 rounded-2xl flex items-center justify-center relative transition ${activeTab === 'search' ? 'text-[#7042f4] bg-purple-50' : 'text-gray-400 hover:text-[#7042f4]'}`}>
-                        <Search size={24} />
+                    <div onClick={() => setActiveTab('search')} className={`flex flex-col items-center gap-1 px-5 py-2 rounded-2xl transition ${activeTab === 'search' ? 'text-[#7042f4]' : 'text-gray-400'}`}>
+                        <Search size={22} />
+                        <span className="text-[9px] font-bold uppercase tracking-wider">Search</span>
+                    </div>
+                    <div onClick={() => setIsGroupModalOpen(true)} className="flex flex-col items-center gap-1 px-5 py-2 rounded-2xl text-gray-400">
+                        <PlusCircle size={22} />
+                        <span className="text-[9px] font-bold uppercase tracking-wider">Group</span>
+                    </div>
+                    <div onClick={logout} className="flex flex-col items-center gap-1 px-5 py-2 rounded-2xl text-gray-400">
+                        <LogOut size={22} />
+                        <span className="text-[9px] font-bold uppercase tracking-wider">Logout</span>
                     </div>
                 </div>
 
