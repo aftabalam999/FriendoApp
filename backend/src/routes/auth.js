@@ -3,16 +3,60 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { db } = require('../config/firebase');
+const { storeOTP, verifyOTP, sendEmailOTP } = require('../services/otpService');
 
-// Register
-router.post('/register', async (req, res) => {
+// ─── SEND OTP ────────────────────────────────────────────────────────────────
+// Step 1 of registration: validate form data, generate + send OTP
+router.post('/send-otp', async (req, res) => {
   try {
-    const { username, password, displayName } = req.body;
+    const { username, displayName, password, contact } = req.body;
 
-    // Check if user exists
+    if (!username || !displayName || !password || !contact) {
+      return res.status(400).json({ message: 'All fields are required.' });
+    }
+
+    // Check username uniqueness
     const userQuery = await db.collection('users').where('username', '==', username).get();
     if (!userQuery.empty) {
-      return res.status(400).json({ message: 'Username already taken' });
+      return res.status(400).json({ message: 'Username already taken.' });
+    }
+
+    // Detect email vs phone
+    const isEmail = contact.includes('@');
+    if (!isEmail) {
+      return res.status(400).json({ message: 'Phone OTP is not supported yet. Please use an email address.' });
+    }
+
+    // Generate and send OTP
+    const otp = storeOTP(contact);
+    await sendEmailOTP(contact, otp);
+
+    res.json({ message: 'OTP sent successfully.', contact });
+  } catch (error) {
+    console.error('send-otp error:', error);
+    res.status(500).json({ message: 'Failed to send OTP: ' + error.message });
+  }
+});
+
+// ─── VERIFY OTP + REGISTER ───────────────────────────────────────────────────
+// Step 2: verify OTP and create the account
+router.post('/verify-otp-register', async (req, res) => {
+  try {
+    const { username, displayName, password, contact, otp } = req.body;
+
+    if (!otp) {
+      return res.status(400).json({ message: 'OTP is required.' });
+    }
+
+    const isValid = verifyOTP(contact, otp);
+    if (!isValid) {
+      return res.status(400).json({ message: 'Invalid or expired OTP. Please try again.' });
+    }
+
+    // Re-check username just in case
+    const userQuery = await db.collection('users').where('username', '==', username).get();
+    if (!userQuery.empty) {
+      return res.status(400).json({ message: 'Username already taken.' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -22,29 +66,39 @@ router.post('/register', async (req, res) => {
       uid: newUserRef.id,
       username,
       displayName,
-      password: hashedPassword, // In a real app, be careful storing passwords in Firestore. 
-      // Ideally use Firebase Auth, but requirements say "Auth: JWT handled by backend only".
-      photoURL: `https://ui-avatars.com/api/?name=${displayName}&background=random`,
+      password: hashedPassword,
+      contact,
+      photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`,
       createdAt: new Date().toISOString(),
       lastActive: new Date().toISOString(),
-      isOnline: true
+      isOnline: true,
     };
 
     await newUserRef.set(newUser);
 
-    const token = jwt.sign({ uid: newUser.uid, username: newUser.username }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign(
+      { uid: newUser.uid, username: newUser.username },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
 
-    res.status(201).json({ token, user: { uid: newUser.uid, username, displayName, photoURL: newUser.photoURL } });
+    res.status(201).json({
+      token,
+      user: { uid: newUser.uid, username, displayName, photoURL: newUser.photoURL },
+    });
   } catch (error) {
-    console.error(error);
-    if ((error.code === 'ENOENT' && error.message.includes('service-account.json')) || error.message.includes('Unable to detect a Project Id')) {
-      return res.status(500).json({ message: 'Missing Firebase service-account.json in backend directory. Please add it.' });
+    console.error('verify-otp-register error:', error);
+    if (
+      (error.code === 'ENOENT' && error.message.includes('service-account.json')) ||
+      error.message.includes('Unable to detect a Project Id')
+    ) {
+      return res.status(500).json({ message: 'Missing Firebase service-account.json.' });
     }
     res.status(500).json({ message: 'Server error: ' + error.message });
   }
 });
 
-// Login
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -62,7 +116,6 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    // Update last active
     await userDoc.ref.update({ lastActive: new Date().toISOString(), isOnline: true });
 
     const token = jwt.sign({ uid: user.uid, username: user.username }, process.env.JWT_SECRET, { expiresIn: '24h' });
@@ -77,37 +130,87 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Reset Password
+// ─── SEND RESET OTP ────────────────────────────────────────────────────────────
+// Step 1 of password reset: look up user by username, send OTP to their contact
+router.post('/send-reset-otp', async (req, res) => {
+  try {
+    const { identifier } = req.body; // username or email
+
+    if (!identifier) {
+      return res.status(400).json({ message: 'Please provide your username or email.' });
+    }
+
+    // Try to find user by username first, then by contact (email)
+    let userDoc = null;
+    const byUsername = await db.collection('users').where('username', '==', identifier).limit(1).get();
+    if (!byUsername.empty) {
+      userDoc = byUsername.docs[0];
+    } else {
+      const byEmail = await db.collection('users').where('contact', '==', identifier).limit(1).get();
+      if (!byEmail.empty) userDoc = byEmail.docs[0];
+    }
+
+    if (!userDoc) {
+      return res.status(404).json({ message: 'No account found with that username or email.' });
+    }
+
+    const userData = userDoc.data();
+    const contact = userData.contact;
+
+    if (!contact || !contact.includes('@')) {
+      return res.status(400).json({ message: 'No email address linked to this account. Cannot send OTP.' });
+    }
+
+    const otp = storeOTP(contact);
+    await sendEmailOTP(contact, otp);
+
+    // Mask the email for the response
+    const masked = contact.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + '*'.repeat(b.length) + c);
+
+    res.json({ message: 'OTP sent.', maskedContact: masked, contact });
+  } catch (error) {
+    console.error('send-reset-otp error:', error);
+    res.status(500).json({ message: 'Failed to send OTP: ' + error.message });
+  }
+});
+
+// ─── RESET PASSWORD (with OTP verification) ────────────────────────────────────
 router.post('/reset-password', async (req, res) => {
   try {
-    const { username, newPassword } = req.body;
+    const { contact, otp, newPassword } = req.body;
 
-    if (!username || !newPassword) {
-      return res.status(400).json({ message: 'Username and new password are required' });
+    if (!contact || !otp || !newPassword) {
+      return res.status(400).json({ message: 'All fields are required.' });
     }
 
     if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+      return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
     }
 
-    const userQuery = await db.collection('users').where('username', '==', username).limit(1).get();
+    // Verify OTP
+    const isValid = verifyOTP(contact, otp);
+    if (!isValid) {
+      return res.status(400).json({ message: 'Invalid or expired OTP. Please try again.' });
+    }
+
+    // Find user by contact email
+    const userQuery = await db.collection('users').where('contact', '==', contact).limit(1).get();
     if (userQuery.empty) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: 'User not found.' });
     }
 
     const userDoc = userQuery.docs[0];
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-
     await userDoc.ref.update({ password: hashedPassword });
 
-    res.json({ message: 'Password reset successfully' });
+    res.json({ message: 'Password reset successfully.' });
   } catch (error) {
-    console.error(error);
+    console.error('reset-password error:', error);
     res.status(500).json({ message: 'Server error: ' + error.message });
   }
 });
 
-// Me
+// ─── ME ───────────────────────────────────────────────────────────────────────
 router.get('/me', async (req, res) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -120,7 +223,6 @@ router.get('/me', async (req, res) => {
       const userDoc = await db.collection('users').doc(decoded.uid).get();
       if (!userDoc.exists) return res.sendStatus(404);
       const user = userDoc.data();
-      // Don't send password
       const { password, ...safeUser } = user;
       res.json(safeUser);
     } catch (e) {
