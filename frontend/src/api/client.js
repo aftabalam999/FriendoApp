@@ -5,7 +5,8 @@ if (!envUrl.endsWith('/api')) {
 }
 const API_URL = envUrl;
 
-const REQUEST_TIMEOUT_MS = 15000; // 15 seconds — prevents hanging requests
+// Increased to 60 seconds because Render free tier goes to sleep and can take 30-50s to wake up
+const REQUEST_TIMEOUT_MS = 60000;
 
 const getHeaders = () => {
   const token = localStorage.getItem('token');

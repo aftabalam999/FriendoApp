@@ -16,6 +16,8 @@ const friendlyError = (msg = '') => {
     if (m.includes('user not found')) return '❌ No account found with that username.';
     if (m.includes('network') || m.includes('fetch'))
         return '🌐 Network error — please check your internet and try again.';
+    if (m.includes('aborted') || m.includes('signal is aborted') || m.includes('timeout'))
+        return '⏳ The server is waking up after being asleep (Render free tier). Please try clicking SEND OTP again in 10-20 seconds!';
     if (m.includes('failed to send')) return '📧 Could not send OTP email. Please double-check your email address.';
     return msg; // fall back to raw message if nothing matched
 };
