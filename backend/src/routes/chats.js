@@ -7,64 +7,64 @@ const { getIo } = require('../socket');
 
 // Get my chats
 router.get('/', authenticateToken, async (req, res) => {
-  try {
-    const uid = req.user.uid;
-    const snapshot = await db.collection('chats')
-        .where('participants', 'array-contains', uid)
-        .get();
+    try {
+        const uid = req.user.uid;
+        const snapshot = await db.collection('chats')
+            .where('participants', 'array-contains', uid)
+            .get();
 
-    const chats = [];
-    const userIds = new Set();
+        const chats = [];
+        const userIds = new Set();
 
-    snapshot.forEach(doc => {
-        const data = doc.data();
-        chats.push({ id: doc.id, ...data });
-        // Collect partner UIDs
-        data.participants.forEach(pUid => {
-            if (pUid !== uid) userIds.add(pUid);
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            chats.push({ id: doc.id, ...data });
+            // Collect partner UIDs
+            data.participants.forEach(pUid => {
+                if (pUid !== uid) userIds.add(pUid);
+            });
         });
-    });
 
-    // Fetch user details for all partners
-    const usersRef = db.collection('users');
-    const userMap = {};
-    
-    // Firestore 'in' query supports up to 10 items. For robustness, we'll fetch individually or in batches if needed.
-    // Since we might have many chats, let's just fetch them all individually for now or use a more scalable approach later.
-    // For a simple chat app, fetching individually in parallel is okay for < 100 chats.
-    // A better approach for larger scale would be to duplicate user data in the chat document, but we'll stick to fetching for now to ensure fresh data.
+        // Fetch user details for all partners
+        const usersRef = db.collection('users');
+        const userMap = {};
 
-    const userPromises = Array.from(userIds).map(async (partnerUid) => {
-        const userDoc = await usersRef.doc(partnerUid).get();
-        if (userDoc.exists) {
-            const { password, ...userData } = userDoc.data();
-            userMap[partnerUid] = userData;
-        }
-    });
+        // Firestore 'in' query supports up to 10 items. For robustness, we'll fetch individually or in batches if needed.
+        // Since we might have many chats, let's just fetch them all individually for now or use a more scalable approach later.
+        // For a simple chat app, fetching individually in parallel is okay for < 100 chats.
+        // A better approach for larger scale would be to duplicate user data in the chat document, but we'll stick to fetching for now to ensure fresh data.
 
-    await Promise.all(userPromises);
+        const userPromises = Array.from(userIds).map(async (partnerUid) => {
+            const userDoc = await usersRef.doc(partnerUid).get();
+            if (userDoc.exists) {
+                const { password, ...userData } = userDoc.data();
+                userMap[partnerUid] = userData;
+            }
+        });
 
-    // Attach partner details to chats
-    const chatsWithDetails = chats.map(chat => {
-        const partnerUid = chat.participants.find(p => p !== uid);
-        return {
-            ...chat,
-            partnerDetails: userMap[partnerUid] || null
-        };
-    });
+        await Promise.all(userPromises);
 
-    // Sort in memory since we removed the Firestore orderBy
-    chatsWithDetails.sort((a, b) => {
-        const dateA = new Date(a.lastMessageAt || 0);
-        const dateB = new Date(b.lastMessageAt || 0);
-        return dateB - dateA;
-    });
+        // Attach partner details to chats
+        const chatsWithDetails = chats.map(chat => {
+            const partnerUid = chat.participants.find(p => p !== uid);
+            return {
+                ...chat,
+                partnerDetails: userMap[partnerUid] || null
+            };
+        });
 
-    res.json(chatsWithDetails);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
+        // Sort in memory since we removed the Firestore orderBy
+        chatsWithDetails.sort((a, b) => {
+            const dateA = new Date(a.lastMessageAt || 0);
+            const dateB = new Date(b.lastMessageAt || 0);
+            return dateB - dateA;
+        });
+
+        res.json(chatsWithDetails);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // Create Group Chat
@@ -139,7 +139,7 @@ router.get('/:chatId/messages', authenticateToken, async (req, res) => {
         // Verify participant
         const chatDoc = await db.collection('chats').doc(chatId).get();
         if (!chatDoc.exists) return res.status(404).json({ message: 'Chat not found' });
-        
+
         if (!chatDoc.data().participants.includes(req.user.uid)) {
             return res.status(403).json({ message: 'Not authorized' });
         }
@@ -180,7 +180,7 @@ router.post('/:chatId/messages', authenticateToken, async (req, res) => {
         };
 
         const msgRef = await chatRef.collection('messages').add(message);
-        
+
         const lastMessageData = {
             id: msgRef.id,
             text: text ? (text.length > 30 ? text.substring(0, 30) + '...' : text) : 'Sent an attachment',
@@ -195,16 +195,18 @@ router.post('/:chatId/messages', authenticateToken, async (req, res) => {
             lastMessage: lastMessageData
         });
 
-        // Notify participants via socket
+        // Notify participants via socket (skipped on Vercel serverless)
         const io = getIo();
         const participants = chatDoc.data().participants;
-        participants.forEach(pUid => {
-            io.to(pUid).emit('newMessage', {
-                chatId,
-                message: { id: msgRef.id, ...message },
-                lastMessage: lastMessageData
+        if (io) {
+            participants.forEach(pUid => {
+                io.to(pUid).emit('newMessage', {
+                    chatId,
+                    message: { id: msgRef.id, ...message },
+                    lastMessage: lastMessageData
+                });
             });
-        });
+        }
 
         res.json({ id: msgRef.id, ...message });
     } catch (error) {
@@ -219,7 +221,7 @@ router.get('/:chatId', authenticateToken, async (req, res) => {
         const { chatId } = req.params;
         const chatDoc = await db.collection('chats').doc(chatId).get();
         if (!chatDoc.exists) return res.status(404).json({ message: 'Chat not found' });
-        
+
         if (!chatDoc.data().participants.includes(req.user.uid)) {
             return res.status(403).json({ message: 'Not authorized' });
         }
@@ -239,7 +241,7 @@ router.post('/:chatId/typing', authenticateToken, async (req, res) => {
         const uid = req.user.uid;
 
         const chatRef = db.collection('chats').doc(chatId);
-        
+
         // Update specific user's typing status in the map
         // We use dot notation to update nested field
         await chatRef.update({
@@ -304,10 +306,10 @@ router.delete('/:chatId/participants/:targetUid', authenticateToken, async (req,
         const chatData = chatDoc.data();
 
         if (chatData.type !== 'group') return res.status(400).json({ message: 'Not a group chat' });
-        
+
         // Only admin can remove others
         if (chatData.admin !== uid) return res.status(403).json({ message: 'Only admin can remove members' });
-        
+
         // Cannot remove self via this route (use leave instead if implemented) or allow it?
         // Admin cannot remove themselves if they are the only admin (logic can be complex), but for now let's allow removing others.
         if (targetUid === uid) return res.status(400).json({ message: 'Cannot remove yourself' });
@@ -340,7 +342,7 @@ router.post('/:chatId/messages/seen', authenticateToken, async (req, res) => {
 
         const chatRef = db.collection('chats').doc(chatId);
         const chatDoc = await chatRef.get();
-        
+
         if (!chatDoc.exists || !chatDoc.data().participants.includes(uid)) {
             return res.status(403).json({ message: 'Not authorized' });
         }
@@ -379,24 +381,26 @@ router.post('/:chatId/messages/seen', authenticateToken, async (req, res) => {
                 const updatedSeenBy = [...(lastMessage.seenBy || []), uid];
                 // Ensure uniqueness just in case
                 const uniqueSeenBy = [...new Set(updatedSeenBy)];
-                
+
                 await chatRef.update({
                     'lastMessage.seenBy': uniqueSeenBy
                 });
             }
 
             await batch.commit();
-            
-            // Notify other participants
+
+            // Notify other participants (skipped on Vercel serverless)
             const io = getIo();
-            const otherParticipants = chatDoc.data().participants.filter(p => p !== uid);
-            otherParticipants.forEach(pUid => {
-                io.to(pUid).emit('messagesSeen', {
-                    chatId,
-                    messageIds: updatedMessageIds,
-                    seenBy: uid
+            if (io) {
+                const otherParticipants = chatDoc.data().participants.filter(p => p !== uid);
+                otherParticipants.forEach(pUid => {
+                    io.to(pUid).emit('messagesSeen', {
+                        chatId,
+                        messageIds: updatedMessageIds,
+                        seenBy: uid
+                    });
                 });
-            });
+            }
         }
 
         res.json({ success: true, updatedCount });

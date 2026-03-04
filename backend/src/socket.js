@@ -26,7 +26,7 @@ const initSocket = (server) => {
         socket.on('answerCall', (data) => {
             io.to(data.to).emit('callAccepted', data.signal);
         });
-        
+
         socket.on('endCall', ({ to }) => {
             console.log(`End call requested from ${socket.id} to ${to}`);
             io.to(to).emit('callEnded');
@@ -40,11 +40,8 @@ const initSocket = (server) => {
     return io;
 };
 
-const getIo = () => {
-    if (!io) {
-        throw new Error("Socket.io not initialized!");
-    }
-    return io;
-};
+// Returns null when running on Vercel (serverless - no Socket.io)
+const getIo = () => io || null;
 
 module.exports = { initSocket, getIo };
+

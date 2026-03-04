@@ -14,22 +14,22 @@ router.post('/request/:uid', authenticateToken, async (req, res) => {
     // Check if already friends
     const friendDoc = await db.collection('friends').doc(`${fromUid}_${toUid}`).get();
     const reverseFriendDoc = await db.collection('friends').doc(`${toUid}_${fromUid}`).get();
-    
+
     if (friendDoc.exists || reverseFriendDoc.exists) {
-        return res.status(400).json({ message: 'Already friends' });
+      return res.status(400).json({ message: 'Already friends' });
     }
 
     const requestRef = db.collection('friend_requests').doc(`${fromUid}_${toUid}`);
     const doc = await requestRef.get();
 
     if (doc.exists) {
-        return res.status(400).json({ message: 'Request already sent' });
+      return res.status(400).json({ message: 'Request already sent' });
     }
 
     // Check if they sent me one
     const reverseRequest = await db.collection('friend_requests').doc(`${toUid}_${fromUid}`).get();
     if (reverseRequest.exists) {
-         return res.status(400).json({ message: 'They already sent you a request. Check your requests!' });
+      return res.status(400).json({ message: 'They already sent you a request. Check your requests!' });
     }
 
     await requestRef.set({
@@ -39,16 +39,18 @@ router.post('/request/:uid', authenticateToken, async (req, res) => {
       createdAt: new Date().toISOString()
     });
 
-    // Emit socket event
+    // Emit socket event (skipped on Vercel serverless)
     try {
-        const io = require('../socket').getIo();
+      const io = require('../socket').getIo();
+      if (io) {
         const userDoc = await db.collection('users').doc(fromUid).get();
         if (userDoc.exists) {
-            const { password, ...safeUser } = userDoc.data();
-            io.to(toUid).emit('newFriendRequest', safeUser);
+          const { password, ...safeUser } = userDoc.data();
+          io.to(toUid).emit('newFriendRequest', safeUser);
         }
+      }
     } catch (e) {
-        console.error('Socket emit error:', e);
+      console.error('Socket emit error:', e);
     }
 
     res.json({ message: 'Request sent' });
@@ -87,37 +89,39 @@ router.post('/accept/:uid', authenticateToken, async (req, res) => {
     const chatDoc = await chatRef.get();
 
     if (!chatDoc.exists) {
-        const now = new Date().toISOString();
-        await chatRef.set({
-            type: 'p2p',
-            participants: [fromUid, toUid],
-            createdAt: now,
-            lastMessageAt: now,
-            lastMessage: {
-                text: 'You both can chat now',
-                senderId: 'system'
-            }
-        });
+      const now = new Date().toISOString();
+      await chatRef.set({
+        type: 'p2p',
+        participants: [fromUid, toUid],
+        createdAt: now,
+        lastMessageAt: now,
+        lastMessage: {
+          text: 'You both can chat now',
+          senderId: 'system'
+        }
+      });
 
-        // Add the actual message to the subcollection
-        await chatRef.collection('messages').add({
-            text: 'You both can chat now',
-            senderId: 'system',
-            createdAt: now,
-            media: null
-        });
+      // Add the actual message to the subcollection
+      await chatRef.collection('messages').add({
+        text: 'You both can chat now',
+        senderId: 'system',
+        createdAt: now,
+        media: null
+      });
     }
 
-    // Emit socket event to the sender that request was accepted
+    // Emit socket event to the sender that request was accepted (skipped on Vercel serverless)
     try {
-        const io = require('../socket').getIo();
+      const io = require('../socket').getIo();
+      if (io) {
         const userDoc = await db.collection('users').doc(toUid).get();
         if (userDoc.exists) {
-            const { password, ...safeUser } = userDoc.data();
-            io.to(fromUid).emit('friendRequestAccepted', safeUser);
+          const { password, ...safeUser } = userDoc.data();
+          io.to(fromUid).emit('friendRequestAccepted', safeUser);
         }
+      }
     } catch (e) {
-        console.error('Socket emit error:', e);
+      console.error('Socket emit error:', e);
     }
 
     res.json({ message: 'Request accepted' });
@@ -133,7 +137,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const uid = req.user.uid;
     // Find friends where users array contains uid
     const snapshot = await db.collection('friends').where('users', 'array-contains', uid).get();
-    
+
     const friendUids = [];
     snapshot.forEach(doc => {
       const data = doc.data();
@@ -147,14 +151,14 @@ router.get('/', authenticateToken, async (req, res) => {
     // Firestore 'in' query supports up to 10 items. For production, batch or individual fetches.
     // Here assuming small number for starter or just fetch all users and filter (bad)
     // Let's do individual fetches for now or chunks
-    
+
     const friends = [];
     for (const fUid of friendUids) {
-        const uDoc = await db.collection('users').doc(fUid).get();
-        if (uDoc.exists) {
-            const { password, ...safeUser } = uDoc.data();
-            friends.push(safeUser);
-        }
+      const uDoc = await db.collection('users').doc(fUid).get();
+      if (uDoc.exists) {
+        const { password, ...safeUser } = uDoc.data();
+        friends.push(safeUser);
+      }
     }
 
     res.json(friends);
@@ -166,45 +170,45 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // Get pending requests (received)
 router.get('/requests', authenticateToken, async (req, res) => {
-    try {
-        const uid = req.user.uid;
-        const snapshot = await db.collection('friend_requests')
-            .where('to', '==', uid)
-            .where('status', '==', 'pending')
-            .get();
-        
-        const requests = [];
-        for (const doc of snapshot.docs) {
-            const data = doc.data();
-            const uDoc = await db.collection('users').doc(data.from).get();
-            if (uDoc.exists) {
-                const { password, ...safeUser } = uDoc.data();
-                requests.push(safeUser);
-            }
-        }
-        res.json(requests);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server error' });
+  try {
+    const uid = req.user.uid;
+    const snapshot = await db.collection('friend_requests')
+      .where('to', '==', uid)
+      .where('status', '==', 'pending')
+      .get();
+
+    const requests = [];
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      const uDoc = await db.collection('users').doc(data.from).get();
+      if (uDoc.exists) {
+        const { password, ...safeUser } = uDoc.data();
+        requests.push(safeUser);
+      }
     }
+    res.json(requests);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 // Get outgoing requests (sent)
 router.get('/requests/sent', authenticateToken, async (req, res) => {
-    try {
-        const uid = req.user.uid;
-        const snapshot = await db.collection('friend_requests')
-            .where('from', '==', uid)
-            .where('status', '==', 'pending')
-            .get();
-        
-        const sent = [];
-        snapshot.forEach(doc => sent.push(doc.data().to)); // Just return UIDs for checking
-        res.json(sent);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server error' });
-    }
+  try {
+    const uid = req.user.uid;
+    const snapshot = await db.collection('friend_requests')
+      .where('from', '==', uid)
+      .where('status', '==', 'pending')
+      .get();
+
+    const sent = [];
+    snapshot.forEach(doc => sent.push(doc.data().to)); // Just return UIDs for checking
+    res.json(sent);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 module.exports = router;
