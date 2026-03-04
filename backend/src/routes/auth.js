@@ -77,6 +77,36 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Reset Password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { username, newPassword } = req.body;
+
+    if (!username || !newPassword) {
+      return res.status(400).json({ message: 'Username and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    const userQuery = await db.collection('users').where('username', '==', username).limit(1).get();
+    if (userQuery.empty) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const userDoc = userQuery.docs[0];
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await userDoc.ref.update({ password: hashedPassword });
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error: ' + error.message });
+  }
+});
+
 // Me
 router.get('/me', async (req, res) => {
   const authHeader = req.headers['authorization'];

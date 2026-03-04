@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
-import { MessageSquare } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { User, Lock, Loader2, BadgeInfo } from 'lucide-react';
 
 export default function Register() {
     const [username, setUsername] = useState('');
@@ -10,10 +10,12 @@ export default function Register() {
     const { register } = useAuth();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
+        setError('');
         try {
             await register(username, displayName, password);
         } catch (err) {
@@ -24,58 +26,111 @@ export default function Register() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-black flex items-center justify-center p-4">
-            <div className="w-full max-w-md p-8 rounded-2xl bg-white/10 backdrop-blur-lg border border-white/20 shadow-xl">
-                <div className="flex justify-center mb-6 text-white">
-                    <MessageSquare size={48} />
+        <div className="min-h-screen bg-[#FAFBFF] flex items-center justify-center p-4 md:p-8 font-sans">
+            <div className="w-full max-w-[850px] h-[550px] bg-white rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.08)] flex overflow-hidden relative border border-gray-100/50">
+
+                {/* LEFT SIDE GRAPHICS */}
+                <div className="hidden md:block w-[35%] h-full relative overflow-hidden bg-[#d9cbff]">
+                    {/* Diagonal Overlays */}
+                    <div className="absolute top-0 left-0 w-[200%] h-[200%] bg-[#b89eff] transform -rotate-[35deg] origin-top-left translate-y-[10%] shadow-lg"></div>
+                    <div className="absolute top-0 left-0 w-[200%] h-[200%] bg-[#926bff] transform -rotate-[35deg] origin-top-left translate-y-[50%] shadow-lg"></div>
+                    <div className="absolute top-0 left-0 w-[200%] h-[200%] bg-[#7042f4] transform -rotate-[35deg] origin-top-left translate-y-[90%] shadow-lg"></div>
+
+                    {/* Left text navigation elements */}
+                    <div className="absolute top-[40%] left-0 -translate-y-1/2 w-full flex flex-col items-end right-0 gap-y-6">
+                        <Link to="/login" className="py-2 px-8 text-white/80 hover:text-white font-bold text-sm tracking-widest transition-colors w-[140px] text-center z-10">
+                            LOGIN
+                        </Link>
+                        <div className="bg-white rounded-l-full py-3 px-8 text-[#7042f4] font-extrabold text-sm tracking-widest shadow-[-5px_5px_15px_rgba(0,0,0,0.1)] z-10 w-[140px] text-center transform translate-x-2">
+                            REGISTER
+                        </div>
+                    </div>
                 </div>
-                <h2 className="text-3xl font-bold text-center mb-8 text-white tracking-tight">Create Account</h2>
-                {error && <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-3 rounded-lg mb-6 text-sm backdrop-blur-sm">{error}</div>}
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
-                        <input
-                            type="text"
-                            className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder-gray-500 backdrop-blur-sm"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            required
-                            placeholder="Choose a username"
-                        />
+
+                {/* RIGHT SIDE FORM */}
+                <div className="flex-1 w-full bg-white flex flex-col justify-center items-center relative z-10 px-8 py-10">
+                    <div className="w-full max-w-[340px]">
+
+                        {/* Avatar & Title */}
+                        <div className="flex flex-col items-center mb-8">
+                            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-[#512da8] to-[#7042f4] flex items-center justify-center mb-4 shadow-[0_10px_25px_rgba(112,66,244,0.4)] border-2 border-white">
+                                <User size={36} color="white" strokeWidth={1.5} />
+                            </div>
+                            <h2 className="text-2xl font-black text-[#7042f4] tracking-wider uppercase">Register</h2>
+                        </div>
+
+                        {error && (
+                            <div className="bg-red-50 text-red-600 border border-red-200 p-3 rounded-lg mb-6 text-sm text-center">
+                                {error}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSubmit} className="space-y-5">
+                            {/* Username Input */}
+                            <div className="relative border-b-2 border-gray-200 focus-within:border-[#7042f4] transition-colors pb-2 group">
+                                <div className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#7042f4] transition-colors">
+                                    <User size={20} />
+                                </div>
+                                <input
+                                    type="text"
+                                    className="w-full pl-10 pr-4 py-2 bg-transparent text-gray-800 placeholder-gray-400 focus:outline-none font-medium"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    required
+                                    placeholder="Choose a username"
+                                />
+                            </div>
+
+                            {/* Display Name Input */}
+                            <div className="relative border-b-2 border-gray-200 focus-within:border-[#7042f4] transition-colors pb-2 group">
+                                <div className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#7042f4] transition-colors">
+                                    <BadgeInfo size={20} />
+                                </div>
+                                <input
+                                    type="text"
+                                    className="w-full pl-10 pr-4 py-2 bg-transparent text-gray-800 placeholder-gray-400 focus:outline-none font-medium"
+                                    value={displayName}
+                                    onChange={(e) => setDisplayName(e.target.value)}
+                                    required
+                                    placeholder="Your display name"
+                                />
+                            </div>
+
+                            {/* Password Input */}
+                            <div className="relative border-b-2 border-gray-200 focus-within:border-[#7042f4] transition-colors pb-2 group">
+                                <div className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#7042f4] transition-colors">
+                                    <Lock size={20} />
+                                </div>
+                                <input
+                                    type="password"
+                                    className="w-full pl-10 pr-4 py-2 bg-transparent text-gray-800 placeholder-gray-400 focus:outline-none font-medium"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    placeholder="Password"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-end pt-4">
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="bg-[#7042f4] hover:bg-[#512da8] text-white px-8 py-2.5 rounded-full font-bold tracking-wider text-sm shadow-[0_5px_15px_rgba(112,66,244,0.4)] transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center"
+                                >
+                                    {loading ? <Loader2 size={18} className="animate-spin" /> : 'REGISTER'}
+                                </button>
+                            </div>
+                        </form>
+
+                        {/* Mobile bottom nav fallback */}
+                        <div className="mt-6 text-center md:hidden">
+                            <p className="text-sm text-gray-500 font-medium">
+                                Already have an account? <Link to="/login" className="text-[#7042f4] font-bold">Login</Link>
+                            </p>
+                        </div>
+
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Display Name</label>
-                        <input
-                            type="text"
-                            className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder-gray-500 backdrop-blur-sm"
-                            value={displayName}
-                            onChange={(e) => setDisplayName(e.target.value)}
-                            required
-                            placeholder="Enter your display name"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
-                        <input
-                            type="password"
-                            className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder-gray-500 backdrop-blur-sm"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                            placeholder="Choose a strong password"
-                        />
-                    </div>
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full py-3 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-lg hover:from-blue-500 hover:to-purple-500 transition-all shadow-lg hover:shadow-purple-500/25 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {loading ? 'Registering...' : 'Register'}
-                    </button>
-                </form>
-                <p className="mt-6 text-center text-sm text-gray-400">
-                    Already have an account? <Link to="/login" className="text-purple-400 hover:text-purple-300 font-medium hover:underline transition-colors">Login</Link>
-                </p>
+                </div>
             </div>
         </div>
     );
