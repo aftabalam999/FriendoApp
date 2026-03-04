@@ -11,18 +11,25 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
-// Initialize Socket.io
-initSocket(server);
+// Allow all origins (CORS) - filter by env for security
+const allowedOrigins = [
+  'https://onefriendo.vercel.app',
+  'https://friendo-app-xi.vercel.app',
+  'https://friendo-nine.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  process.env.FRONTEND_URL
+].filter(Boolean);
 
 app.use(cors({
-  origin: [
-    'https://onefriendo.vercel.app',
-    'https://friendo-app-xi.vercel.app',
-    'https://friendo-nine.vercel.app',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    process.env.FRONTEND_URL
-  ].filter(Boolean),
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. curl, Postman, same-origin)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 app.use(express.json());
@@ -35,9 +42,17 @@ app.use('/api/chats', require('./routes/chats'));
 app.use('/api/upload', require('./routes/upload'));
 
 app.get('/', (req, res) => {
-  res.send('Friendo API is running');
+  res.send('Friendo API is running ✅');
 });
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Only start socket + listen when running locally (not on Vercel serverless)
+if (process.env.VERCEL !== '1') {
+  initSocket(server);
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+// Export for Vercel serverless
+module.exports = app;
+
