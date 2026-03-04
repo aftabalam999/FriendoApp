@@ -16,9 +16,10 @@ initSocket(server);
 
 app.use(cors({
   origin: [
-    'https://onefriendo.vercel.app', 
-    'https://friendo-app-xi.vercel.app', 
-    'http://localhost:5173', 
+    'https://onefriendo.vercel.app',
+    'https://friendo-app-xi.vercel.app',
+    'https://friendo-nine.vercel.app',
+    'http://localhost:5173',
     'http://localhost:3000',
     process.env.FRONTEND_URL
   ].filter(Boolean),
