@@ -77,6 +77,7 @@ export default function Register() {
             setSentContact(data.contact);
             setStep(2);
         } catch (err) {
+            console.error('Registration OTP Error:', err, err.response?.data);
             setError(friendlyError(err.response?.data?.message || err.message));
         } finally {
             setLoading(false);
@@ -119,6 +120,7 @@ export default function Register() {
         try {
             await verifyOtpRegister(username.trim(), displayName.trim(), password, sentContact, code);
         } catch (err) {
+            console.error('OTP Verification Error:', err, err.response?.data);
             setError(friendlyError(err.response?.data?.message || err.message));
             setOtp(['', '', '', '', '', '']);
             otpRefs.current[0]?.focus();

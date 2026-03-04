@@ -1,11 +1,20 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Lock, Loader2 } from 'lucide-react';
+import { User, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
+
+const friendlyError = (msg = '') => {
+    if (!msg) return 'Something went wrong. Please try again.';
+    const m = msg.toLowerCase();
+    if (m.includes('invalid credentials')) return '❌ Wrong username or password.';
+    if (m.includes('network') || m.includes('fetch')) return '🌐 Network error — please check your internet connection.';
+    return msg;
+};
 
 export default function Login() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const { login } = useAuth();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -18,7 +27,8 @@ export default function Login() {
         try {
             await login(username, password);
         } catch (err) {
-            setError(err.message);
+            console.error('Login Error:', err, err.response?.data);
+            setError(friendlyError(err.response?.data?.message || err.message));
         } finally {
             setLoading(false);
         }
@@ -86,13 +96,17 @@ export default function Login() {
                                     <Lock size={20} />
                                 </div>
                                 <input
-                                    type="password"
-                                    className="w-full pl-10 pr-4 py-2 bg-transparent text-gray-800 placeholder-gray-400 focus:outline-none font-medium"
+                                    type={showPassword ? "text" : "password"}
+                                    className="w-full pl-10 pr-10 py-2 bg-transparent text-gray-800 placeholder-gray-400 focus:outline-none font-medium"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
                                     placeholder="Password"
                                 />
+                                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#7042f4] transition-colors p-1">
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
                             </div>
 
                             <div className="flex items-center justify-between pt-4">
