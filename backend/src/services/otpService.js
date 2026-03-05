@@ -24,6 +24,7 @@ const createTransporter = () => {
         connectionTimeout: 10000, // 10s
         greetingTimeout: 10000,  // 10s
         socketTimeout: 15000,    // 15s
+        family: 4, // Force IPv4 routing explicitly in the socket
         auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS,
