@@ -1,4 +1,13 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+
+// Force Node to prefer IPv4. Render sometimes resolves to IPv6 for Google SMTP
+// but lacks IPv6 routing, resulting in Connect ENETUNREACH or Timeout errors.
+try {
+    dns.setDefaultResultOrder('ipv4first');
+} catch (e) {
+    // Ignore on older Node versions
+}
 
 // In-memory OTP store
 const otpStore = {};
@@ -9,7 +18,9 @@ const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString()
 // and drops persistent sockets, causing pooled connections to hang indefinitely.
 const createTransporter = () => {
     return nodemailer.createTransport({
-        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
         connectionTimeout: 10000, // 10s
         greetingTimeout: 10000,  // 10s
         socketTimeout: 15000,    // 15s
@@ -17,6 +28,9 @@ const createTransporter = () => {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS,
         },
+        tls: {
+            rejectUnauthorized: false
+        }
     });
 };
 
