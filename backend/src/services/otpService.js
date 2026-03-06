@@ -17,21 +17,29 @@ const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString()
 // Create transporter per-request because Render free tier freezes processes
 // and drops persistent sockets, causing pooled connections to hang indefinitely.
 const createTransporter = () => {
-    return nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
-        connectionTimeout: 10000, // 10s
-        greetingTimeout: 10000,  // 10s
-        socketTimeout: 15000,    // 15s
-        family: 4, // Force IPv4 routing explicitly in the socket
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-        tls: {
-            rejectUnauthorized: false
-        }
+    return new Promise((resolve, reject) => {
+        // Manually force IPv4 lookup to completely bypass IPv6 ENETUNREACH errors on Render
+        dns.lookup('smtp.gmail.com', { family: 4 }, (err, address) => {
+            if (err) return reject(err);
+
+            const transporter = nodemailer.createTransport({
+                host: address, // <--- IPv4 explicitly
+                port: 465,
+                secure: true,
+                connectionTimeout: 10000,
+                greetingTimeout: 10000,
+                socketTimeout: 15000,
+                tls: {
+                    servername: 'smtp.gmail.com', // Required for SSL SNI since host is an IP
+                    rejectUnauthorized: false
+                },
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASS,
+                }
+            });
+            resolve(transporter);
+        });
     });
 };
 
@@ -66,7 +74,7 @@ const verifyOTP = (key, inputOtp) => {
  * Send OTP via email using Gmail SMTP (shared transporter)
  */
 const sendEmailOTP = async (email, otp) => {
-    const transporter = createTransporter();
+    const transporter = await createTransporter();
     await transporter.sendMail({
         from: `"Friendo App" <${process.env.EMAIL_USER}>`,
         to: email,
