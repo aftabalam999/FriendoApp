@@ -40,7 +40,7 @@ const verifyOTP = (key, inputOtp) => {
 const sendEmailOTP = async (email, otp) => {
     try {
         await resend.emails.send({
-            from: 'Friendo App <onboarding@resend.dev>',
+            from: 'Friendo App <noreply@mnagency.cv>',
             to: email,
             subject: 'Your Friendo Verification Code',
             html: `
