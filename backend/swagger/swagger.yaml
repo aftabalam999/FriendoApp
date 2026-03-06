@@ -1,0 +1,519 @@
+openapi: 3.0.0
+info:
+  title: Friendo App API
+  version: 1.0.0
+  description: API Documentation for Friendo App Backend
+servers:
+  - url: http://localhost:3000
+    description: Development Server
+  - url: https://friendo-backend.vercel.app
+    description: Production Server (Example)
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+tags:
+  - name: Auth
+    description: Authentication management API
+  - name: Users
+    description: User management API
+  - name: Friends
+    description: Friends and friend requests management
+  - name: Chats
+    description: Chat creation and messages
+  - name: Upload
+    description: File upload API
+
+paths:
+  /api/auth/send-otp:
+    post:
+      summary: Send OTP for registration
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, displayName, password, contact]
+              properties:
+                username:
+                  type: string
+                displayName:
+                  type: string
+                password:
+                  type: string
+                contact:
+                  type: string
+                  description: Must be an email address
+      responses:
+        "200":
+          description: OTP sent successfully
+        "400":
+          description: Invalid input or username taken
+  /api/auth/verify-otp-register:
+    post:
+      summary: Verify OTP and register user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, displayName, password, contact, otp]
+              properties:
+                username:
+                  type: string
+                displayName:
+                  type: string
+                password:
+                  type: string
+                contact:
+                  type: string
+                otp:
+                  type: string
+      responses:
+        "201":
+          description: User registered successfully
+        "400":
+          description: Invalid OTP or input
+  /api/auth/login:
+    post:
+      summary: Login user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
+        "400":
+          description: Invalid credentials
+  /api/auth/google:
+    post:
+      summary: Google login or registration
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accessToken]
+              properties:
+                accessToken:
+                  type: string
+      responses:
+        "200":
+          description: Successful authentication
+        "400":
+          description: Failed authentication
+  /api/auth/send-reset-otp:
+    post:
+      summary: Send OTP for password reset
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier]
+              properties:
+                identifier:
+                  type: string
+                  description: Use username or email
+      responses:
+        "200":
+          description: OTP sent
+        "404":
+          description: User not found
+  /api/auth/reset-password:
+    post:
+      summary: Reset password with OTP
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contact, otp, newPassword]
+              properties:
+                contact:
+                  type: string
+                otp:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        "200":
+          description: Password reset successfully
+        "400":
+          description: Invalid OTP or input
+  /api/auth/me:
+    get:
+      summary: Get current authenticated user
+      tags: [Auth]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user information
+        "401":
+          description: Unauthorized
+
+  /api/users/search:
+    get:
+      summary: Search for users
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: The search query to match against usernames
+      responses:
+        "200":
+          description: List of matched users
+        "401":
+          description: Unauthorized
+  /api/users/{uid}:
+    get:
+      summary: Get user profile by UID
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: uid
+          required: true
+          schema:
+            type: string
+          description: The user ID
+      responses:
+        "200":
+          description: User profile
+        "404":
+          description: User not found
+  /api/users/me:
+    put:
+      summary: Update current user profile
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                photoURL:
+                  type: string
+                bio:
+                  type: string
+                dob:
+                  type: string
+                  format: date
+      responses:
+        "200":
+          description: Successfully updated profile
+        "401":
+          description: Unauthorized
+
+  /api/friends/request/{uid}:
+    post:
+      summary: Send friend request
+      tags: [Friends]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: uid
+          required: true
+          schema:
+            type: string
+          description: The target user ID
+      responses:
+        "200":
+          description: Request sent
+        "400":
+          description: Invalid request
+  /api/friends/accept/{uid}:
+    post:
+      summary: Accept friend request
+      tags: [Friends]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: uid
+          required: true
+          schema:
+            type: string
+          description: The sender user ID
+      responses:
+        "200":
+          description: Request accepted
+        "404":
+          description: Request not found
+  /api/friends:
+    get:
+      summary: Get list of friends
+      tags: [Friends]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of friends
+  /api/friends/requests:
+    get:
+      summary: Get pending friend requests (received)
+      tags: [Friends]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of pending received requests
+  /api/friends/requests/sent:
+    get:
+      summary: Get pending friend requests (sent)
+      tags: [Friends]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of pending sent request target UIDs
+
+  /api/chats:
+    get:
+      summary: Get user's chats
+      tags: [Chats]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of chats
+  /api/chats/group:
+    post:
+      summary: Create a group chat
+      tags: [Chats]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, participants]
+              properties:
+                name:
+                  type: string
+                participants:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Group chat created
+  /api/chats/p2p/{targetUid}:
+    post:
+      summary: Create or get a 1-on-1 chat
+      tags: [Chats]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: targetUid
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chat ID returned
+  /api/chats/{chatId}/messages:
+    get:
+      summary: Get chat messages
+      tags: [Chats]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: chatId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of messages
+    post:
+      summary: Send a message to chat
+      tags: [Chats]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: chatId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                media:
+                  type: object
+                  properties:
+                    url:
+                      type: string
+                    type:
+                      type: string
+                    name:
+                      type: string
+      responses:
+        "200":
+          description: Message sent
+  /api/chats/{chatId}:
+    get:
+      summary: Get chat details
+      tags: [Chats]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: chatId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chat details
+  /api/chats/{chatId}/typing:
+    post:
+      summary: Update typing status
+      tags: [Chats]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: chatId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isTyping:
+                  type: boolean
+      responses:
+        "200":
+          description: Typing status updated
+  /api/chats/{chatId}/participants:
+    post:
+      summary: Add participant to group chat
+      tags: [Chats]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: chatId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newParticipants:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Participants added
+  /api/chats/{chatId}/participants/{targetUid}:
+    delete:
+      summary: Remove participant from group chat
+      tags: [Chats]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: chatId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: targetUid
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Participant removed
+  /api/chats/{chatId}/messages/seen:
+    post:
+      summary: Mark messages as seen
+      tags: [Chats]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: chatId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Messages marked as seen
+
+  /api/upload:
+    post:
+      summary: Upload file to Google Drive
+      tags: [Upload]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: File uploaded successfully

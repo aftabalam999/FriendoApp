@@ -1,6 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const path = require('path');
 
 dotenv.config();
 
@@ -10,6 +13,10 @@ const { initSocket } = require('./socket');
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+
+// Swagger Setup
+const swaggerDocument = YAML.load(path.join(__dirname, '../swagger/swagger.yaml'));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Allow all origins (CORS) - filter by env for security
 const allowedOrigins = [
