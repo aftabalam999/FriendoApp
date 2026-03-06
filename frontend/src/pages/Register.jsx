@@ -239,23 +239,23 @@ export default function Register() {
                                         ) : 'SEND OTP'}
                                     </button>
                                 </div>
-
-                                <div className="relative flex py-2 items-center">
-                                    <div className="flex-grow border-t border-gray-200"></div>
-                                    <span className="flex-shrink-0 mx-4 text-gray-400 text-xs">OR</span>
-                                    <div className="flex-grow border-t border-gray-200"></div>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={() => googleLoginAction()}
-                                    disabled={loading}
-                                    className="w-full flex justify-center items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-8 py-2.5 rounded-full font-bold text-sm shadow-sm transition-all focus:outline-none"
-                                >
-                                    <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4" />
-                                    Sign up with Google
-                                </button>
                             </form>
+
+                            <div className="relative flex py-2 items-center">
+                                <div className="flex-grow border-t border-gray-200"></div>
+                                <span className="flex-shrink-0 mx-4 text-gray-400 text-xs">OR</span>
+                                <div className="flex-grow border-t border-gray-200"></div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => googleLoginAction()}
+                                disabled={loading}
+                                className="w-full flex justify-center items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-8 py-2.5 rounded-full font-bold text-sm shadow-sm transition-all focus:outline-none"
+                            >
+                                <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4" />
+                                Sign up with Google
+                            </button>
 
                             <div className="mt-5 text-center md:hidden">
                                 <p className="text-sm text-gray-500">Have an account? <Link to="/login" className="text-[#7042f4] font-bold">Login</Link></p>
