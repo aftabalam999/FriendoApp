@@ -1,47 +1,11 @@
-const nodemailer = require('nodemailer');
-const dns = require('dns');
-
-// Force Node to prefer IPv4. Render sometimes resolves to IPv6 for Google SMTP
-// but lacks IPv6 routing, resulting in Connect ENETUNREACH or Timeout errors.
-try {
-    dns.setDefaultResultOrder('ipv4first');
-} catch (e) {
-    // Ignore on older Node versions
-}
+const { Resend } = require('resend');
 
 // In-memory OTP store
 const otpStore = {};
 
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-// Create transporter per-request because Render free tier freezes processes
-// and drops persistent sockets, causing pooled connections to hang indefinitely.
-const createTransporter = () => {
-    return new Promise((resolve, reject) => {
-        // Manually force IPv4 lookup to completely bypass IPv6 ENETUNREACH errors on Render
-        dns.lookup('smtp.gmail.com', { family: 4 }, (err, address) => {
-            if (err) return reject(err);
-
-            const transporter = nodemailer.createTransport({
-                host: address, // <--- IPv4 explicitly
-                port: 465,
-                secure: true,
-                connectionTimeout: 10000,
-                greetingTimeout: 10000,
-                socketTimeout: 15000,
-                tls: {
-                    servername: 'smtp.gmail.com', // Required for SSL SNI since host is an IP
-                    rejectUnauthorized: false
-                },
-                auth: {
-                    user: process.env.EMAIL_USER,
-                    pass: process.env.EMAIL_PASS,
-                }
-            });
-            resolve(transporter);
-        });
-    });
-};
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
  * Store a new OTP (valid for 10 minutes) for a given key (email or phone)
@@ -71,31 +35,34 @@ const verifyOTP = (key, inputOtp) => {
 };
 
 /**
- * Send OTP via email using Gmail SMTP (shared transporter)
+ * Send OTP via email using Resend
  */
 const sendEmailOTP = async (email, otp) => {
-    const transporter = await createTransporter();
-    await transporter.sendMail({
-        from: `"Friendo App" <${process.env.EMAIL_USER}>`,
-        to: email,
-        subject: 'Your Friendo Verification Code',
-        html: `
-            <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; border-radius: 12px; background: #fafbff; border: 1px solid #e5e7eb;">
-                <div style="text-align: center; margin-bottom: 24px;">
-                    <h2 style="color: #7042f4; font-size: 22px; margin: 0;">Welcome to Friendo!</h2>
-                    <p style="color: #6b7280; margin-top: 8px;">Please verify your account</p>
-                </div>
-                <div style="background: white; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #e5e7eb; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-                    <p style="color: #374151; margin-bottom: 16px; font-size: 15px;">Your 6-digit verification code is:</p>
-                    <div style="font-size: 40px; font-weight: 900; letter-spacing: 12px; color: #7042f4; padding: 12px 0;">
-                        ${otp}
+    try {
+        await resend.emails.send({
+            from: 'Friendo App <onboarding@resend.dev>',
+            to: email,
+            subject: 'Your Friendo Verification Code',
+            html: `
+                <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; border-radius: 12px; background: #fafbff; border: 1px solid #e5e7eb;">
+                    <div style="text-align: center; margin-bottom: 24px;">
+                        <h2 style="color: #7042f4; font-size: 22px; margin: 0;">Welcome to Friendo!</h2>
+                        <p style="color: #6b7280; margin-top: 8px;">Please verify your account</p>
                     </div>
-                    <p style="color: #9ca3af; font-size: 13px; margin-top: 16px;">This code expires in <strong>10 minutes</strong>. Do not share it with anyone.</p>
+                    <div style="background: white; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #e5e7eb; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                        <p style="color: #374151; margin-bottom: 16px; font-size: 15px;">Your 6-digit verification code is:</p>
+                        <div style="font-size: 40px; font-weight: 900; letter-spacing: 12px; color: #7042f4; padding: 12px 0;">
+                            ${otp}
+                        </div>
+                        <p style="color: #9ca3af; font-size: 13px; margin-top: 16px;">This code expires in <strong>10 minutes</strong>. Do not share it with anyone.</p>
+                    </div>
                 </div>
-            </div>
-        `,
-    });
+            `,
+        });
+    } catch (error) {
+        console.error('Error sending email via Resend:', error);
+        throw error;
+    }
 };
 
 module.exports = { storeOTP, verifyOTP, sendEmailOTP };
-
