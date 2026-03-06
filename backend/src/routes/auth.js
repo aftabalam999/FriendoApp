@@ -130,6 +130,72 @@ router.post('/login', async (req, res) => {
   }
 });
 
+const axios = require('axios');
+
+// ─── GOOGLE LOGIN/REGISTER ──────────────────────────────────────────────────
+router.post('/google', async (req, res) => {
+  try {
+    const { accessToken } = req.body;
+
+    // 1. Fetch user data from Google
+    const { data: googleProfile } = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    const email = googleProfile.email;
+    const name = googleProfile.name;
+    const picture = googleProfile.picture;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Google login failed: No email provided.' });
+    }
+
+    // 2. Check if user already exists
+    const userQuery = await db.collection('users').where('contact', '==', email).limit(1).get();
+
+    let userDoc;
+    let user;
+
+    if (!userQuery.empty) {
+      // User exists -> Login
+      userDoc = userQuery.docs[0];
+      user = userDoc.data();
+      await userDoc.ref.update({ lastActive: new Date().toISOString(), isOnline: true });
+    } else {
+      // User doesn't exist -> Register
+      // generate a highly likely unique username based on the email alias
+      const usernameBase = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '');
+      const username = `${usernameBase}_${Math.floor(1000 + Math.random() * 9000)}`;
+
+      // Random secure password (they won't use it, but needed for schema)
+      const randomPassword = await bcrypt.hash(Math.random().toString(36).slice(-10), 10);
+
+      userDoc = db.collection('users').doc();
+      user = {
+        uid: userDoc.id,
+        username,
+        displayName: name || usernameBase,
+        password: randomPassword,
+        contact: email,
+        photoURL: picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || usernameBase)}&background=random`,
+        createdAt: new Date().toISOString(),
+        lastActive: new Date().toISOString(),
+        isOnline: true,
+      };
+      await userDoc.set(user);
+    }
+
+    // 3. Issue JWT Token
+    const token = jwt.sign({ uid: user.uid, username: user.username }, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+    res.json({ token, user: { uid: user.uid, username: user.username, displayName: user.displayName, photoURL: user.photoURL } });
+
+  } catch (error) {
+    console.error('Google Auth Error:', error);
+    res.status(500).json({ message: 'Google Authentication Failed' });
+  }
+});
+
 // ─── SEND RESET OTP ────────────────────────────────────────────────────────────
 // Step 1 of password reset: look up user by username, send OTP to their contact
 router.post('/send-reset-otp', async (req, res) => {

@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { User, Lock, Loader2, BadgeInfo, Mail, ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { useGoogleLogin } from '@react-oauth/google';
 
 // ── Friendly error messages ─────────────────────────────────────
 const friendlyError = (msg = '') => {
@@ -16,14 +17,32 @@ const friendlyError = (msg = '') => {
     if (m.includes('user not found')) return '❌ No account found with that username.';
     if (m.includes('network') || m.includes('fetch'))
         return '🌐 Network error — please check your internet and try again.';
-    if (m.includes('aborted') || m.includes('signal is aborted') || m.includes('timeout'))
+    if (m.includes('aborted') || m.includes('signal is aborted'))
         return '⏳ The server is waking up after being asleep (Render free tier). Please try clicking SEND OTP again in 10-20 seconds!';
+    if (m.includes('timeout') || m.includes('enetunreach'))
+        return 'Something went wrong! To register, you need to use Google login';
     if (m.includes('failed to send')) return '📧 Could not send OTP email. Please double-check your email address.';
     return msg; // fall back to raw message if nothing matched
 };
 
 export default function Register() {
-    const { sendOtp, verifyOtpRegister } = useAuth();
+    const { sendOtp, verifyOtpRegister, googleLogin } = useAuth();
+
+    const googleLoginAction = useGoogleLogin({
+        onSuccess: async (tokenResponse) => {
+            setLoading(true);
+            setError('');
+            try {
+                await googleLogin(tokenResponse.access_token);
+            } catch (err) {
+                console.error('Google Login Error:', err);
+                setError(friendlyError(err.response?.data?.message || err.message));
+            } finally {
+                setLoading(false);
+            }
+        },
+        onError: () => setError('Google Login Failed'),
+    });
 
     // Step 1 fields
     const [username, setUsername] = useState('');
@@ -220,6 +239,22 @@ export default function Register() {
                                         ) : 'SEND OTP'}
                                     </button>
                                 </div>
+
+                                <div className="relative flex py-2 items-center">
+                                    <div className="flex-grow border-t border-gray-200"></div>
+                                    <span className="flex-shrink-0 mx-4 text-gray-400 text-xs">OR</span>
+                                    <div className="flex-grow border-t border-gray-200"></div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => googleLoginAction()}
+                                    disabled={loading}
+                                    className="w-full flex justify-center items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-8 py-2.5 rounded-full font-bold text-sm shadow-sm transition-all focus:outline-none"
+                                >
+                                    <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4" />
+                                    Sign up with Google
+                                </button>
                             </form>
 
                             <div className="mt-5 text-center md:hidden">

@@ -13,14 +13,18 @@ window.global = window;
 window.process = process;
 window.Buffer = Buffer;
 
+import { GoogleOAuthProvider } from '@react-oauth/google';
+
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <AuthProvider>
-                <SocketProvider>
-                    <App />
-                </SocketProvider>
-            </AuthProvider>
-        </BrowserRouter>
+        <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
+            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                <AuthProvider>
+                    <SocketProvider>
+                        <App />
+                    </SocketProvider>
+                </AuthProvider>
+            </BrowserRouter>
+        </GoogleOAuthProvider>
     </React.StrictMode>,
 )

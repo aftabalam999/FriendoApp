@@ -33,7 +33,14 @@ export default function ForgotPassword() {
             setMaskedContact(data.maskedContact);
             setStep(2);
         } catch (err) {
-            setError(err.response?.data?.message || err.message || 'Failed to send OTP');
+            let msg = err.response?.data?.message || err.message || 'Failed to send OTP';
+            if (msg.toLowerCase().includes('timeout') || msg.toLowerCase().includes('enetunreach')) {
+                msg = 'Something went wrong! To reset password, you need to use Google login';
+            }
+            if (msg.toLowerCase().includes('aborted')) {
+                msg = 'Please try again in 10-20 seconds!';
+            }
+            setError(msg);
         } finally {
             setLoading(false);
         }

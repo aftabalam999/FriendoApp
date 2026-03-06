@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
+import { useGoogleLogin } from '@react-oauth/google';
 
 const friendlyError = (msg = '') => {
     if (!msg) return 'Something went wrong. Please try again.';
@@ -17,10 +18,26 @@ export default function Login() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const { login } = useAuth();
+    const { login, googleLogin } = useAuth();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
+
+    const googleLoginAction = useGoogleLogin({
+        onSuccess: async (tokenResponse) => {
+            setLoading(true);
+            setError('');
+            try {
+                await googleLogin(tokenResponse.access_token);
+            } catch (err) {
+                console.error('Google Login Error:', err);
+                setError(friendlyError(err.response?.data?.message || err.message));
+            } finally {
+                setLoading(false);
+            }
+        },
+        onError: () => setError('Google Login Failed'),
+    });
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -123,6 +140,22 @@ export default function Login() {
                                     {loading ? <Loader2 size={18} className="animate-spin" /> : 'LOGIN'}
                                 </button>
                             </div>
+
+                            <div className="relative flex py-5 items-center">
+                                <div className="flex-grow border-t border-gray-200"></div>
+                                <span className="flex-shrink-0 mx-4 text-gray-400 text-xs">OR</span>
+                                <div className="flex-grow border-t border-gray-200"></div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => googleLoginAction()}
+                                disabled={loading}
+                                className="w-full flex justify-center items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-8 py-2.5 rounded-full font-bold text-sm shadow-sm transition-all focus:outline-none"
+                            >
+                                <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4" />
+                                Continue with Google
+                            </button>
                         </form>
 
                         {/* Mobile bottom nav fallback */}
