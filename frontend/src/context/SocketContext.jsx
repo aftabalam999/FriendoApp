@@ -18,6 +18,7 @@ export const SocketProvider = ({ children }) => {
     const [name, setName] = useState('');
     const [isCalling, setIsCalling] = useState(false);
     const [callPartnerId, setCallPartnerId] = useState(null);
+    const [facingMode, setFacingMode] = useState('user');
 
     const myVideo = useRef();
     const connectionRef = useRef();
@@ -253,6 +254,51 @@ export const SocketProvider = ({ children }) => {
         handleCallEnd();
     };
 
+    const switchCamera = async () => {
+        if (!stream) return;
+        try {
+            const newFacingMode = facingMode === 'user' ? 'environment' : 'user';
+            
+            let newStream;
+            try {
+                newStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: { exact: newFacingMode } },
+                    audio: false
+                });
+            } catch (err) {
+                newStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: newFacingMode },
+                    audio: false
+                });
+            }
+
+            const newVideoTrack = newStream.getVideoTracks()[0];
+            const oldVideoTrack = stream.getVideoTracks()[0];
+
+            if (oldVideoTrack) {
+                oldVideoTrack.stop();
+                stream.removeTrack(oldVideoTrack);
+            }
+            
+            if (newVideoTrack) {
+                stream.addTrack(newVideoTrack);
+            }
+
+            if (connectionRef.current && oldVideoTrack && newVideoTrack) {
+                connectionRef.current.replaceTrack(oldVideoTrack, newVideoTrack, stream);
+            }
+
+            // Create a new stream reference for React to trigger re-renders
+            const updatedStream = new MediaStream(stream.getTracks());
+            setStream(updatedStream);
+            window.localStream = updatedStream;
+            
+            setFacingMode(newFacingMode);
+        } catch (error) {
+            console.error("Error switching camera:", error);
+        }
+    };
+
     return (
         <SocketContext.Provider value={{
             call,
@@ -269,7 +315,9 @@ export const SocketProvider = ({ children }) => {
             answerCall,
             setStream,
             isCalling,
-            socket
+            socket,
+            switchCamera,
+            facingMode
         }}>
             {children}
         </SocketContext.Provider>

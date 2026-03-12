@@ -156,11 +156,11 @@ export default function Register() {
         : '';
 
     return (
-        <div className="min-h-screen bg-[#FAFBFF] flex items-center justify-center p-4 md:p-8 font-sans">
+        <div className="min-h-screen bg-[#FAFBFF] flex items-center justify-center p-4 sm:p-6 md:p-8 font-sans">
             <div className="w-full max-w-[850px] bg-white rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.08)] flex overflow-hidden relative border border-gray-100/50">
 
                 {/* LEFT SIDE GRAPHICS */}
-                <div className="hidden md:block w-[35%] min-h-[560px] h-full relative overflow-hidden bg-[#d9cbff]">
+                <div className="hidden md:block w-[35%] min-h-[560px] h-full relative overflow-hidden bg-[#d9cbff] flex-shrink-0">
                     <div className="absolute top-0 left-0 w-[200%] h-[200%] bg-[#b89eff] transform -rotate-[35deg] origin-top-left translate-y-[10%] shadow-lg"></div>
                     <div className="absolute top-0 left-0 w-[200%] h-[200%] bg-[#926bff] transform -rotate-[35deg] origin-top-left translate-y-[50%] shadow-lg"></div>
                     <div className="absolute top-0 left-0 w-[200%] h-[200%] bg-[#7042f4] transform -rotate-[35deg] origin-top-left translate-y-[90%] shadow-lg"></div>
@@ -171,16 +171,17 @@ export default function Register() {
                 </div>
 
                 {/* RIGHT SIDE FORM */}
-                <div className="flex-1 w-full bg-white flex flex-col justify-center items-center relative z-10 px-8 py-12">
+                <div className="flex-1 w-full min-w-0 bg-white flex flex-col justify-center items-center relative z-10 px-5 sm:px-8 py-8 sm:py-12">
 
                     {/* ── STEP 1: Registration Form ── */}
                     {step === 1 && (
                         <div className="w-full max-w-[340px]">
-                            <div className="flex flex-col items-center mb-7">
-                                <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-[#512da8] to-[#7042f4] flex items-center justify-center mb-4 shadow-[0_10px_25px_rgba(112,66,244,0.4)] border-2 border-white">
-                                    <User size={34} color="white" strokeWidth={1.5} />
+                            <div className="flex flex-col items-center mb-6 sm:mb-7">
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-tr from-[#512da8] to-[#7042f4] flex items-center justify-center mb-3 sm:mb-4 shadow-[0_10px_25px_rgba(112,66,244,0.4)] border-2 border-white">
+                                    <User size={28} color="white" strokeWidth={1.5} className="sm:hidden" />
+                                    <User size={34} color="white" strokeWidth={1.5} className="hidden sm:block" />
                                 </div>
-                                <h2 className="text-2xl font-black text-[#7042f4] tracking-wider uppercase">Create Account</h2>
+                                <h2 className="text-xl sm:text-2xl font-black text-[#7042f4] tracking-wider uppercase text-center w-full">Create Account</h2>
                                 <p className="text-xs text-gray-400 mt-1">Fill in the details below to get started</p>
                             </div>
 
@@ -190,7 +191,7 @@ export default function Register() {
                                 </div>
                             )}
 
-                            <form onSubmit={handleSendOtp} className="space-y-5" noValidate>
+                            <form onSubmit={handleSendOtp} className="space-y-4 sm:space-y-5" noValidate>
                                 {/* Username */}
                                 <div className="relative border-b-2 border-gray-200 focus-within:border-[#7042f4] transition-colors pb-2 group">
                                     <div className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#7042f4] transition-colors"><User size={17} /></div>
@@ -226,22 +227,22 @@ export default function Register() {
                                     <input type="email" className="w-full pl-8 pr-4 py-2 bg-transparent text-gray-800 placeholder-gray-400 focus:outline-none font-medium text-[14.5px]"
                                         value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Email address" autoComplete="email" />
                                 </div>
-                                <p className="text-[11px] text-gray-400 -mt-2 pl-1">📧 A 6-digit code will be sent to this email to verify your account.</p>
+                                <p className="text-[11px] text-gray-400 -mt-2 pl-1 leading-snug">📧 A 6-digit code will be sent to this email to verify your account.</p>
 
-                                <div className="flex items-center justify-between pt-1">
-                                    <p className="text-sm text-gray-400 hidden md:block">
+                                <div className="flex flex-col sm:flex-row items-center justify-between pt-1 gap-4 sm:gap-2">
+                                    <p className="text-sm text-gray-400 hidden sm:block">
                                         Have an account? <Link to="/login" className="text-[#7042f4] font-bold">Login</Link>
                                     </p>
                                     <button type="submit" disabled={loading}
-                                        className="bg-[#7042f4] hover:bg-[#512da8] text-white px-8 py-2.5 rounded-full font-bold tracking-wider text-sm shadow-[0_5px_15px_rgba(112,66,244,0.4)] transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 flex items-center gap-2 ml-auto">
+                                        className="w-full sm:w-auto bg-[#7042f4] hover:bg-[#512da8] text-white px-8 py-2.5 rounded-full font-bold tracking-wider text-sm shadow-[0_5px_15px_rgba(112,66,244,0.4)] transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 flex items-center justify-center gap-2 sm:ml-auto">
                                         {loading ? (
-                                            <><Loader2 size={15} className="animate-spin" /><span className="text-xs">{loadingMsg}</span></>
+                                            <><Loader2 size={15} className="animate-spin" /><span className="text-xs">{loadingMsg || 'SENDING...'}</span></>
                                         ) : 'SEND OTP'}
                                     </button>
                                 </div>
                             </form>
 
-                            <div className="relative flex py-2 items-center">
+                            <div className="relative flex py-3 sm:py-4 items-center">
                                 <div className="flex-grow border-t border-gray-200"></div>
                                 <span className="flex-shrink-0 mx-4 text-gray-400 text-xs">OR</span>
                                 <div className="flex-grow border-t border-gray-200"></div>
@@ -251,13 +252,13 @@ export default function Register() {
                                 type="button"
                                 onClick={() => googleLoginAction()}
                                 disabled={loading}
-                                className="w-full flex justify-center items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-8 py-2.5 rounded-full font-bold text-sm shadow-sm transition-all focus:outline-none"
+                                className="w-full flex justify-center items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 sm:px-8 py-2.5 rounded-full font-bold text-sm shadow-sm transition-all focus:outline-none"
                             >
                                 <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4" />
                                 Sign up with Google
                             </button>
 
-                            <div className="mt-5 text-center md:hidden">
+                            <div className="mt-5 text-center sm:hidden">
                                 <p className="text-sm text-gray-500">Have an account? <Link to="/login" className="text-[#7042f4] font-bold">Login</Link></p>
                             </div>
                         </div>
@@ -266,11 +267,12 @@ export default function Register() {
                     {/* ── STEP 2: OTP Verification ── */}
                     {step === 2 && (
                         <div className="w-full max-w-[340px]">
-                            <div className="flex flex-col items-center mb-7">
-                                <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-[#512da8] to-[#7042f4] flex items-center justify-center mb-4 shadow-[0_10px_25px_rgba(112,66,244,0.4)] border-2 border-white">
-                                    <ShieldCheck size={34} color="white" strokeWidth={1.5} />
+                            <div className="flex flex-col items-center mb-6 sm:mb-7">
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-tr from-[#512da8] to-[#7042f4] flex items-center justify-center mb-3 sm:mb-4 shadow-[0_10px_25px_rgba(112,66,244,0.4)] border-2 border-white">
+                                    <ShieldCheck size={28} color="white" strokeWidth={1.5} className="sm:hidden" />
+                                    <ShieldCheck size={34} color="white" strokeWidth={1.5} className="hidden sm:block" />
                                 </div>
-                                <h2 className="text-2xl font-black text-[#7042f4] tracking-wider uppercase">Verify Email</h2>
+                                <h2 className="text-xl sm:text-2xl font-black text-[#7042f4] tracking-wider uppercase text-center w-full">Verify Email</h2>
                                 <p className="text-sm text-gray-500 mt-2 text-center leading-relaxed">
                                     We sent a 6-digit code to<br />
                                     <span className="font-semibold text-gray-700">{maskedContact}</span><br />
@@ -284,15 +286,15 @@ export default function Register() {
                                 </div>
                             )}
 
-                            <form onSubmit={handleVerifyOtp} className="space-y-7">
+                            <form onSubmit={handleVerifyOtp} className="space-y-6 sm:space-y-7">
                                 {/* 6-digit OTP boxes */}
-                                <div className="flex justify-between gap-2" onPaste={handleOtpPaste}>
+                                <div className="flex justify-between gap-1 sm:gap-2" onPaste={handleOtpPaste}>
                                     {otp.map((digit, i) => (
                                         <input key={i} ref={(el) => (otpRefs.current[i] = el)}
                                             type="text" inputMode="numeric" maxLength={1} value={digit}
                                             onChange={(e) => handleOtpChange(i, e.target.value)}
                                             onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                                            className="w-12 h-14 text-center text-2xl font-black text-[#7042f4] border-2 border-gray-200 rounded-xl focus:border-[#7042f4] focus:outline-none bg-[#FAFBFF] transition-all focus:shadow-[0_0_0_3px_rgba(112,66,244,0.15)] caret-transparent"
+                                            className="w-10 h-12 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-black text-[#7042f4] border-2 border-gray-200 rounded-lg sm:rounded-xl focus:border-[#7042f4] focus:outline-none bg-[#FAFBFF] transition-all focus:shadow-[0_0_0_3px_rgba(112,66,244,0.15)] caret-transparent"
                                         />
                                     ))}
                                 </div>
@@ -301,7 +303,7 @@ export default function Register() {
                                     <button type="submit" disabled={loading || otp.join('').length < 6}
                                         className="w-full bg-[#7042f4] hover:bg-[#512da8] text-white py-3 rounded-full font-bold tracking-wider text-sm shadow-[0_5px_15px_rgba(112,66,244,0.4)] transition-all hover:-translate-y-0.5 disabled:opacity-40 flex items-center justify-center gap-2">
                                         {loading ? (
-                                            <><Loader2 size={15} className="animate-spin" /><span className="text-xs">{loadingMsg}</span></>
+                                            <><Loader2 size={15} className="animate-spin" /><span className="text-xs">{loadingMsg || 'VERIFYING...'}</span></>
                                         ) : 'VERIFY & CREATE ACCOUNT'}
                                     </button>
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useSocket } from '../context/SocketContext';
-import { Phone, PhoneOff, Video as VideoIcon, Mic, MicOff, VideoOff, Users, MessageSquare } from 'lucide-react';
+import { Phone, PhoneOff, Video as VideoIcon, Mic, MicOff, VideoOff, Users, MessageSquare, SwitchCamera } from 'lucide-react';
 
 const Video = ({ peer, isLocal }) => {
     const ref = useRef();
@@ -36,7 +36,8 @@ const GroupVideoCall = () => {
         leaveCall,
         answerCall,
         isCalling,
-        peers
+        peers = [], // Default to empty array if peers map is undefined
+        switchCamera
     } = useSocket();
 
     const [isMicOn, setIsMicOn] = useState(true);
@@ -130,6 +131,14 @@ const GroupVideoCall = () => {
                     className={`p-3 rounded-full transition-all ${isCamOn ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-red-500 text-white hover:bg-red-600'}`}
                 >
                     {isCamOn ? <VideoIcon size={24} /> : <VideoOff size={24} />}
+                </button>
+
+                <button
+                    onClick={switchCamera}
+                    className="p-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-all shadow-lg"
+                    title="Switch Camera"
+                >
+                    <SwitchCamera size={24} />
                 </button>
             </div>
         </div>

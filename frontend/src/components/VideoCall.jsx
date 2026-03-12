@@ -1,13 +1,35 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
-import { PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff } from 'lucide-react';
+import { PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff, SwitchCamera } from 'lucide-react';
 
 export default function VideoCall() {
-    const { name, callAccepted, myVideo, remoteStream, callEnded, stream, call, answerCall, leaveCall, isCalling } = useSocket();
+    const { name, callAccepted, myVideo, remoteStream, callEnded, stream, call, answerCall, leaveCall, isCalling, switchCamera } = useSocket();
     const { user } = useAuth();
     const remoteVideoRef = React.useRef();
     const [imgError, setImgError] = useState(false);
+    const [isMicOn, setIsMicOn] = useState(true);
+    const [isCamOn, setIsCamOn] = useState(true);
+
+    const toggleMic = () => {
+        if (stream) {
+            const audioTrack = stream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                setIsMicOn(audioTrack.enabled);
+            }
+        }
+    };
+
+    const toggleCam = () => {
+        if (stream) {
+            const videoTrack = stream.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.enabled = !videoTrack.enabled;
+                setIsCamOn(videoTrack.enabled);
+            }
+        }
+    };
 
 
 
@@ -112,8 +134,18 @@ export default function VideoCall() {
 
                     {/* Controls Bar */}
                     <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center space-x-6 bg-gray-900/80 backdrop-blur-md px-8 py-4 rounded-full border border-white/10 shadow-2xl z-[100]">
-                        <button className="p-4 rounded-full bg-gray-700/50 text-white hover:bg-gray-600 transition-colors">
-                            <Mic size={24} />
+                        <button 
+                            onClick={toggleMic}
+                            className={`p-4 rounded-full transition-all ${isMicOn ? 'bg-gray-700/50 text-white hover:bg-gray-600' : 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/30 transform hover:scale-105'}`}
+                        >
+                            {isMicOn ? <Mic size={24} /> : <MicOff size={24} />}
+                        </button>
+                        <button
+                            onClick={switchCamera}
+                            className="p-4 rounded-full bg-blue-500 text-white hover:bg-blue-600 shadow-lg shadow-blue-500/30 transform hover:scale-105 transition-all"
+                            title="Switch Camera"
+                        >
+                            <SwitchCamera size={24} />
                         </button>
                         <button
                             onClick={leaveCall}
@@ -121,8 +153,11 @@ export default function VideoCall() {
                         >
                             <PhoneOff size={28} />
                         </button>
-                        <button className="p-4 rounded-full bg-gray-700/50 text-white hover:bg-gray-600 transition-colors">
-                            <VideoIcon size={24} />
+                        <button 
+                            onClick={toggleCam}
+                            className={`p-4 rounded-full transition-all ${isCamOn ? 'bg-gray-700/50 text-white hover:bg-gray-600' : 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/30 transform hover:scale-105'}`}
+                        >
+                            {isCamOn ? <VideoIcon size={24} /> : <VideoOff size={24} />}
                         </button>
                     </div>
                 </div>
